@@ -29,16 +29,36 @@ npm run dev                  # http://localhost:3000
 
 Everything you write and all feedback is stored locally in `data/humanly.db`.
 
+### Choosing a provider (free options included)
+
+Set `HUMANLY_PROVIDER` in `.env.local`:
+
+| Provider | Cost | Key |
+| --- | --- | --- |
+| `anthropic` (default) | Paid, best quality | `ANTHROPIC_API_KEY` from console.anthropic.com |
+| `nvidia` | Free tier, rate-limited | `NVIDIA_API_KEY` from build.nvidia.com |
+| `openrouter` | Free `:free` models, rate-limited | `OPENROUTER_API_KEY` from openrouter.ai/keys |
+| `groq` | Free tier, rate-limited | `GROQ_API_KEY` from console.groq.com |
+| `custom` | any OpenAI-compatible API | `HUMANLY_BASE_URL` + `HUMANLY_API_KEY` |
+
+```bash
+# example: NVIDIA free tier
+HUMANLY_PROVIDER=nvidia
+NVIDIA_API_KEY=nvapi-...
+```
+
+Free providers use a default Llama 70B model (override with `HUMANLY_*_MODEL` if it is retired). They get 2 drafts instead of 3, and calls are spaced out to stay under per-minute caps, so a Best rewrite takes longer. The engine asks free models for JSON and validates it, retrying once if the reply is malformed. Run `npm run eval` on each provider and compare the mean scores before settling on one. The scores come from the configured judge model, so only compare runs that use the same judge model.
+
 ### Configuration
 
-All models default to `claude-haiku-5-5`. You can change any setting in `.env.local`:
+All models default to the provider's preset (`claude-haiku-5-5` on Anthropic). You can change any setting in `.env.local`:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HUMANLY_FAST_MODEL` / `HUMANLY_FAST_EFFORT` | `claude-haiku-5-5` / `low` | Fast, single-pass rewrites |
-| `HUMANLY_BEST_MODEL` / `HUMANLY_BEST_EFFORT` | `claude-haiku-5-5` / `medium` | Drafts, polish, alternatives, learner |
-| `HUMANLY_JUDGE_MODEL` / `HUMANLY_JUDGE_EFFORT` | `claude-haiku-5-5` / `medium` | Scores drafts and final output |
-| `HUMANLY_CANDIDATES` | `3` | Competing drafts per Best rewrite (1–5) |
+| `HUMANLY_FAST_MODEL` / `HUMANLY_FAST_EFFORT` | provider preset / `low` | Fast, single-pass rewrites (effort: Anthropic only) |
+| `HUMANLY_BEST_MODEL` / `HUMANLY_BEST_EFFORT` | provider preset / `medium` | Drafts, polish, alternatives, learner |
+| `HUMANLY_JUDGE_MODEL` / `HUMANLY_JUDGE_EFFORT` | provider preset / `medium` | Scores drafts and final output |
+| `HUMANLY_CANDIDATES` | `3` (`2` on free providers) | Competing drafts per Best rewrite (1–5) |
 | `HUMANLY_MAX_WORDS` | `0` (off) | Word cap per request |
 | `HUMANLY_RATE_LIMIT_PER_MIN` | `0` (off) | Requests per IP per minute |
 | `HUMANLY_DATA_DIR` | `./data` | Where the SQLite database lives |
@@ -90,6 +110,8 @@ src/
     api/feedback                    ratings, notes, hand edits; triggers auto-learning
     api/learning, api/phrases       dashboard data and actions
   lib/
+    llm.ts          one interface over Anthropic and OpenAI-compatible providers
+    openaiCompat.ts streaming, retries, think-tag stripping, JSON extraction
     pipeline.ts     drafts → judge → polish → final check
     judge.ts        comparative scoring with structured output
     scoring.ts      combines judge ratings and local checks into one score

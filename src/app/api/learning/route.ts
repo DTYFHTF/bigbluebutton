@@ -24,6 +24,7 @@ export async function GET() {
     evalRuns: listEvalRuns(),
     status: learningStatus(),
     models: {
+      provider: config.providerLabel,
       fast: config.fastModel,
       best: config.bestModel,
       judge: config.judgeModel,

@@ -1,5 +1,5 @@
 import { config } from "./config";
-import { streamText } from "./claude";
+import { streamText } from "./llm";
 import { pickExamples } from "./examples";
 import { issueNotes, judge, type Judgement } from "./judge";
 import {
@@ -57,10 +57,10 @@ export async function draftOnce(
   return streamText(
     {
       model: opts.model,
-      max_tokens: maxTokensFor(countWords(req.text)),
-      output_config: { effort: opts.effort },
+      effort: opts.effort,
+      maxTokens: maxTokensFor(countWords(req.text)),
       system: buildSystemPrompt(req, { guideRules: opts.guideRules, angle: opts.angle }),
-      messages: [{ role: "user", content: buildUserMessage(req.text, examples) }],
+      user: buildUserMessage(req.text, examples),
     },
     { onDelta: opts.onDelta, signal: opts.signal },
   );
@@ -139,10 +139,10 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
       const refined = await streamText(
         {
           model: config.bestModel,
-          max_tokens: maxTokensFor(countWords(req.text)),
-          output_config: { effort: config.bestEffort },
+          effort: config.bestEffort,
+          maxTokens: maxTokensFor(countWords(req.text)),
           system: `${buildSystemPrompt(req, { guideRules })}\n\n${REFINE_INSTRUCTIONS}`,
-          messages: [{ role: "user", content: buildRefineMessage(req.text, bestDraft, issueNotes(bestJudgement.issues)) }],
+          user: buildRefineMessage(req.text, bestDraft, issueNotes(bestJudgement.issues)),
         },
         { onDelta: (text) => emit({ type: "delta", text }), signal },
       );

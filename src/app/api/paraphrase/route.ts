@@ -1,4 +1,4 @@
-import { describeApiError } from "@/lib/claude";
+import { describeApiError } from "@/lib/llm";
 import { config } from "@/lib/config";
 import { runPipeline, type PipelineEvent } from "@/lib/pipeline";
 import { paraphraseRequestSchema } from "@/lib/prompt";

@@ -1,9 +1,8 @@
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { RefusalError, fallbackParams, getClient } from "./claude";
 import { config } from "./config";
 import { evalRequest, loadEvalPassages, mapLimit, rotatingSlice } from "./evalset";
 import { judge } from "./judge";
+import { generateJson } from "./llm";
 import { getMode } from "./modes";
 import { draftOnce } from "./pipeline";
 import {
@@ -83,24 +82,15 @@ function formatFeedback(runs: Run[]): string {
 }
 
 async function proposeGuide(currentRules: string[], feedback: Run[]) {
-  const response = await getClient().beta.messages.parse({
+  const proposal = await generateJson(proposalSchema, {
     model: config.bestModel,
-    max_tokens: 16000,
-    output_config: { effort: "high", format: betaZodOutputFormat(proposalSchema) },
-    ...fallbackParams(config.bestModel),
+    effort: "high",
+    maxTokens: 16000,
     system: LEARN_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `<current_guide>\n${
-          currentRules.length ? currentRules.map((r) => `- ${r}`).join("\n") : "(empty)"
-        }\n</current_guide>\n\n<recent_feedback>\n${formatFeedback(feedback)}\n</recent_feedback>`,
-      },
-    ],
+    user: `<current_guide>\n${
+      currentRules.length ? currentRules.map((r) => `- ${r}`).join("\n") : "(empty)"
+    }\n</current_guide>\n\n<recent_feedback>\n${formatFeedback(feedback)}\n</recent_feedback>`,
   });
-  if (response.stop_reason === "refusal") throw new RefusalError();
-  if (!response.parsed_output) throw new Error("The learner returned no proposal.");
-  const proposal = response.parsed_output;
   return { ...proposal, rules: proposal.rules.map((r) => r.trim()).filter(Boolean).slice(0, 25) };
 }
 

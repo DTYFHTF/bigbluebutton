@@ -23,7 +23,7 @@ interface LearningData {
     running: boolean;
     last: null | { status?: string; summary?: string; error?: string; candidate?: number; baseline?: number; finishedAt: number };
   };
-  models: { fast: string; best: string; judge: string; candidates: number };
+  models: { provider: string; fast: string; best: string; judge: string; candidates: number };
   autoLearnEvery: number;
 }
 
@@ -129,7 +129,7 @@ export default function LearningPage() {
                 <Stat label="New feedback" value={data.stats.pending} />
               </div>
               <p className="muted" style={{ marginBottom: 0 }}>
-                Models: fast <code>{data.models.fast}</code> · best <code>{data.models.best}</code> ×
+                {data.models.provider} · fast <code>{data.models.fast}</code> · best <code>{data.models.best}</code> ×
                 {data.models.candidates} drafts · judge <code>{data.models.judge}</code>.{" "}
                 {data.autoLearnEvery > 0
                   ? `Learns automatically after every ${data.autoLearnEvery} pieces of new feedback.`

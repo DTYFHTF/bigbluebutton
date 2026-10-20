@@ -1,8 +1,7 @@
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { findAiPhrases } from "./aiisms";
-import { RefusalError, fallbackParams, getClient } from "./claude";
 import { config } from "./config";
+import { generateJson } from "./llm";
 import { describeTask, missingFrozenTerms, type ParaphraseRequest } from "./prompt";
 import { toScores } from "./scoring";
 import type { LearnedPhrase, Scores } from "./store";
@@ -60,24 +59,17 @@ export async function judge(
     .map((idx, pos) => `<candidate label="${LABELS[pos]}">\n${candidates[idx]}\n</candidate>`)
     .join("\n\n");
 
-  const response = await getClient().beta.messages.parse(
+  const { evaluations } = await generateJson(
+    judgeSchema,
     {
       model: config.judgeModel,
-      max_tokens: 16000,
-      output_config: { effort: config.judgeEffort, format: betaZodOutputFormat(judgeSchema) },
-      ...fallbackParams(config.judgeModel),
+      effort: config.judgeEffort,
+      maxTokens: 16000,
       system: JUDGE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `<instructions>\n${describeTask(req)}\n</instructions>\n\n<original>\n${original}\n</original>\n\n${blocks}`,
-        },
-      ],
+      user: `<instructions>\n${describeTask(req)}\n</instructions>\n\n<original>\n${original}\n</original>\n\n${blocks}`,
     },
     { signal },
   );
-  if (response.stop_reason === "refusal") throw new RefusalError();
-  const evaluations = response.parsed_output?.evaluations ?? [];
 
   return candidates.map((text, idx) => {
     const label = LABELS[order.indexOf(idx)];
