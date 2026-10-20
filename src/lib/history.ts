@@ -2,6 +2,8 @@ import type { ModeId } from "./modes";
 
 export interface HistoryItem {
   id: string;
+  // Server-side run, so feedback on a restored rewrite still reaches the learner.
+  runId?: string | null;
   at: number;
   mode: ModeId;
   input: string;

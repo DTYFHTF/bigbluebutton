@@ -596,3 +596,262 @@ select,
     min-height: 260px;
   }
 }
+
+/* Engine & learning additions */
+a.ghost {
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+}
+
+.topnav {
+  display: flex;
+  gap: 8px;
+}
+
+.control-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--surface);
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 14px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.segmented .segmented-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.output-edit {
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.65;
+  width: 100%;
+}
+
+.scores {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-main {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.feedback {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.icon {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+
+.icon:hover,
+.icon-on,
+.icon-on-bad {
+  filter: none;
+  opacity: 1;
+}
+
+.icon-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.icon-on-bad {
+  border-color: var(--danger);
+  background: var(--robotic);
+}
+
+.feedback-note {
+  display: flex;
+  align-items: center;
+}
+
+.feedback-note input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: var(--surface);
+  width: 220px;
+  max-width: 50vw;
+}
+
+/* Learning page */
+.learning {
+  max-width: 1000px;
+}
+
+.learning h1 {
+  font-size: 22px;
+  margin: 4px 0 4px;
+}
+
+.learning h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.rules-editor {
+  width: 100%;
+  min-height: 180px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  line-height: 1.6;
+  margin: 8px 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 7px 8px 7px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+.badge-active,
+.badge-manual {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.badge-rejected {
+  background: var(--robotic);
+}
+
+.phrase-form input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--surface);
+}

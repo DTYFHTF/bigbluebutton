@@ -8,15 +8,19 @@ interface Props {
   onChange: (value: string) => void;
   onSubmit: () => void;
   highlight: boolean;
+  extraPhrases?: Array<{ phrase: string; suggestion: string }>;
   disabled?: boolean;
 }
 
 // A textarea with a backdrop layer behind it that marks robotic phrases.
 // The backdrop renders the same text with the same metrics, so the marks
 // line up with the characters in the textarea above it.
-export function InputPane({ value, onChange, onSubmit, highlight, disabled }: Props) {
+export function InputPane({ value, onChange, onSubmit, highlight, extraPhrases = [], disabled }: Props) {
   const backdropRef = useRef<HTMLDivElement>(null);
-  const hits = useMemo(() => (highlight ? findAiPhrases(value) : []), [value, highlight]);
+  const hits = useMemo(
+    () => (highlight ? findAiPhrases(value, extraPhrases) : []),
+    [value, highlight, extraPhrases],
+  );
 
   const marked = useMemo(() => {
     const nodes: React.ReactNode[] = [];

@@ -1,78 +1,107 @@
-# Humanly — paraphraser & AI humanizer
+# Humanly: paraphraser & writing humanizer
 
-Humanly rewrites stiff, generic, AI-sounding text into clear, natural writing. It is modelled on the workflow of tools like QuillBot: paste text, pick a mode, get a rewrite with the changes highlighted, then click any sentence for alternatives.
+Humanly rewrites stiff, generic, AI-sounding text into clear, natural writing. It follows a QuillBot-style workflow: paste text, pick a mode, get a rewrite with the changes highlighted, then click any sentence for alternatives.
 
-Built with Next.js (App Router, TypeScript) and the Claude API.
+The rewrite engine keeps getting better as you use it. It learns from your ratings, notes and hand edits, and it only adopts a change if that change holds up on a fixed eval set.
+
+Built with Next.js (App Router, TypeScript), the Claude API and Node's built-in SQLite.
 
 ## Features
 
 - **10 modes**: Humanize, Standard, Fluency, Formal, Academic, Simple, Creative, Shorten, Expand, and Custom (describe your own tone).
-- **Synonym slider** (1–5): how much of the original vocabulary to replace.
-- **Freeze words**: names and terms that must come through unchanged; the app warns if one goes missing.
-- **English dialects**: US, UK, Australian, Canadian spelling and usage.
-- **Streaming output** with a Stop button.
-- **Show changes**: word-level diff highlights what was rewritten, plus a "% changed" figure.
-- **Rephrase a sentence**: click any sentence in the output to get three alternatives and swap one in.
-- **Robotic phrase highlighter**: marks stock phrases ("delve into", "it's important to note", "plays a crucial role", …) in the input as you type.
-- **Writing signals**: before/after comparison of robotic phrases, sentence-length variety, average sentence length and em-dash use.
-- **History**: the last 20 rewrites, stored in the browser only.
-- Per-IP rate limiting, an input word cap, and prompt-injection-safe prompting (the user's text is treated as content, never as instructions).
+- **Best / Fast quality.** Best writes several drafts, has a judge model score them, polishes the winner using the judge's notes, and ships the polish only if it beats the draft. Fast is one pass.
+- **Quality scores** on every rewrite: overall, naturalness, meaning, fluency.
+- **Synonym slider**, **freeze words**, **US/UK/AU/CA English**, live streaming with a Stop button.
+- **Show changes**, **rephrase a sentence** (click it for three alternatives), and **edit the output** in place.
+- **Robotic phrase highlighter** and a before/after **writing signals** panel.
+- **Feedback**: thumbs up/down with an optional note. Hand edits and swapped-in alternatives are saved automatically.
+- **Learning dashboard** (`/learning`): stats, the learned style guide (editable), learned phrases, guide history with A/B scores, and eval runs.
 
 ## Getting started
 
-Requires Node.js 22+.
+Requires Node.js 22.13+ (it uses the built-in `node:sqlite`).
 
 ```bash
 npm install
-cp .env.example .env.local   # then add your ANTHROPIC_API_KEY
+cp .env.example .env.local   # add your ANTHROPIC_API_KEY
 npm run dev                  # http://localhost:3000
 ```
 
+Everything you write and all feedback is stored locally in `data/humanly.db`.
+
+### Configuration
+
+All models default to `claude-haiku-5-5`. You can change any setting in `.env.local`:
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | — | Required. Key from console.anthropic.com |
-| `HUMANLY_MODEL` | `claude-opus-5-5` | Model used for rewrites |
-| `HUMANLY_MAX_WORDS` | `1500` | Max words per request |
-| `HUMANLY_RATE_LIMIT_PER_MIN` | `20` | Requests per IP per minute |
+| `HUMANLY_FAST_MODEL` / `HUMANLY_FAST_EFFORT` | `claude-haiku-5-5` / `low` | Fast, single-pass rewrites |
+| `HUMANLY_BEST_MODEL` / `HUMANLY_BEST_EFFORT` | `claude-haiku-5-5` / `medium` | Drafts, polish, alternatives, learner |
+| `HUMANLY_JUDGE_MODEL` / `HUMANLY_JUDGE_EFFORT` | `claude-haiku-5-5` / `medium` | Scores drafts and final output |
+| `HUMANLY_CANDIDATES` | `3` | Competing drafts per Best rewrite (1–5) |
+| `HUMANLY_MAX_WORDS` | `0` (off) | Word cap per request |
+| `HUMANLY_RATE_LIMIT_PER_MIN` | `0` (off) | Requests per IP per minute |
+| `HUMANLY_DATA_DIR` | `./data` | Where the SQLite database lives |
+| `HUMANLY_AUTO_LEARN_EVERY` | `10` | Run the learner after this many new pieces of feedback (0 = manual only) |
+| `HUMANLY_LEARN_TOLERANCE` | `0.15` | How much a new guide may score below the current one and still be adopted |
 
-```bash
-npm test          # unit tests (diff, sentence splitting, phrase detection, prompts, rate limit)
-npm run typecheck
-npm run build
+To push quality further, set `HUMANLY_BEST_MODEL=claude-opus-5-5`. Use a judge model that differs from the drafting model, so the judge isn't grading its own writing.
+
+## How the engine works
+
+```
+Best quality
+  drafts ×N (in parallel, each with a different "angle")
+     │   prompt = mode + learned style guide + your most similar approved rewrites (few-shot)
+     ▼
+  judge: scores every draft (naturalness, meaning, fluency, mode fit) + concrete issues
+     │   + local checks (robotic phrases, missing frozen terms)
+     ▼
+  polish the best draft using the judge's issues  ──streamed to you──▶
+     ▼
+  final check: polish vs draft; ship whichever scores higher
 ```
 
-## How it works
+### How it keeps improving
+
+1. **Few-shot memory.** Rewrites you liked or corrected become examples. Each new request pulls in the three most similar ones from the same mode (TF-IDF retrieval). When you corrected a rewrite, your edited version is the example.
+2. **Learned style guide.** The learner reads your recent feedback and revises a short list of style rules that goes into every prompt. Hand edits are the strongest evidence, then notes, then ratings. It also adds phrases you keep removing to the robotic-phrase list.
+3. **Guarded adoption.** Before adopting a new guide, the learner rewrites a rotating slice of the eval passages with both the old and new guides and has the judge score each pair side by side. If the new guide makes quality worse, it is rejected.
+4. **Eval tracking.** `npm run eval` scores the whole pipeline on the 12 passages in `eval/passages.json` and logs the mean, so you can see whether changes to models, prompts or guides actually help.
+
+The learner runs automatically once enough new feedback builds up. You can also start it with **Learn now** on `/learning`, or with `npm run learn`.
+
+```bash
+npm test                                   # unit tests
+npm run typecheck
+npm run eval                               # Best quality, all eval passages
+npm run eval -- --quality fast --limit 4   # quicker check
+npm run learn -- --force                   # learning round from the CLI
+```
+
+## Code map
 
 ```
 src/
   app/
-    page.tsx                  UI entry (server component, passes the word cap)
-    api/paraphrase/route.ts   streams the rewrite as NDJSON (delta / done / error)
-    api/alternatives/route.ts structured output: three rewrites of one sentence
-  components/                 Paraphraser, InputPane (highlight overlay), OutputPane, Signals, FrozenTerms
+    page.tsx, learning/page.tsx    editor and learning dashboard
+    api/paraphrase                  runs the pipeline, streams NDJSON events
+    api/alternatives                three rewrites of one sentence
+    api/feedback                    ratings, notes, hand edits; triggers auto-learning
+    api/learning, api/phrases       dashboard data and actions
   lib/
-    modes.ts                  mode definitions and synonym levels
-    prompt.ts                 request schema + system prompt builder
-    aiisms.ts                 robotic phrase detector
-    diff.ts                   word-level LCS diff
-    segments.ts               groups the diff into clickable sentences
-    text.ts                   word count, sentence splitting, rhythm stats
-    rateLimit.ts              in-memory per-IP limiter
+    pipeline.ts     drafts → judge → polish → final check
+    judge.ts        comparative scoring with structured output
+    scoring.ts      combines judge ratings and local checks into one score
+    learn.ts        style-guide learner with A/B adoption
+    examples.ts     few-shot retrieval from approved and corrected rewrites
+    store.ts        SQLite: runs, feedback, guides, phrases, eval runs
+    prompt.ts       request schema and prompt builders
+    modes.ts, aiisms.ts, diff.ts, segments.ts, text.ts, similarity.ts, evalset.ts
+scripts/eval.mts, scripts/learn.mts
+eval/passages.json
 ```
-
-Requests use `effort: "low"` for fast, cheap rewrites, and opt into the API's server-side fallback (`fallbacks: "default"`) so a declined request is retried on Anthropic's recommended fallback model instead of failing.
-
-## Taking it to production
-
-Things this MVP intentionally leaves out, roughly in the order a business would need them:
-
-1. **Accounts and billing** — auth (e.g. Clerk/Auth.js) and Stripe subscriptions; a free tier with a lower word cap (QuillBot uses 125 words) and a premium tier with all modes and a higher cap.
-2. **Shared rate limiting / quotas** — the limiter is in-memory per instance; move it to Redis/Upstash and track usage per user.
-3. **Cost controls** — log `usage` per request, set per-plan model and effort (a cheaper model for free users, for example).
-4. **More tools around the core** — grammar checker, summarizer, tone detector, citation generator, browser extension, and a Word/Google Docs add-on.
-5. **File upload** — .docx / .pdf in, .docx out.
-6. **Evaluation set** — a fixed set of passages and a rubric to check that prompt changes improve output quality before shipping them.
 
 ## Responsible use
 
-Humanly is a writing tool: it improves clarity and voice. It is not designed to defeat AI-detection systems, and the writing signals it shows are style heuristics, not a detector score. Users are responsible for following their school's or employer's rules on AI-assisted writing.
+Humanly is a writing tool. It improves clarity and voice, and it is not designed or tuned to defeat AI-detection systems. Its scores measure writing quality, not detectability. Users are responsible for following their school's or employer's rules on AI-assisted writing.

@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildSystemPrompt, buildUserMessage, missingFrozenTerms, paraphraseRequestSchema } from "@/lib/prompt";
+import {
+  buildRefineMessage,
+  buildSystemPrompt,
+  buildUserMessage,
+  missingFrozenTerms,
+  paraphraseRequestSchema,
+} from "@/lib/prompt";
 
 const base = paraphraseRequestSchema.parse({ text: "Hello there.", mode: "humanize" });
 
 describe("paraphraseRequestSchema", () => {
   it("applies defaults", () => {
-    expect(base).toMatchObject({ synonyms: 3, dialect: "en-US", frozen: [] });
+    expect(base).toMatchObject({ quality: "best", synonyms: 3, dialect: "en-US", frozen: [] });
   });
 
   it("rejects empty text and unknown modes", () => {
@@ -34,6 +40,26 @@ describe("buildSystemPrompt", () => {
   it("does not put user text in the system prompt", () => {
     expect(buildSystemPrompt(base)).not.toContain("Hello there.");
     expect(buildUserMessage("Hello there.")).toBe("<text>\nHello there.\n</text>");
+  });
+});
+
+describe("learned guide, angles and examples", () => {
+  it("adds guide rules and the draft angle", () => {
+    const prompt = buildSystemPrompt(base, { guideRules: ["Never use 'utilize'."], angle: "Approach: be brief." });
+    expect(prompt).toContain("- Never use 'utilize'.");
+    expect(prompt).toContain("Approach: be brief.");
+    expect(buildSystemPrompt(base, { guideRules: [] })).not.toContain("Style guide");
+  });
+
+  it("puts examples before the passage", () => {
+    const msg = buildUserMessage("New text.", [{ input: "Old.", output: "Older." }]);
+    expect(msg.indexOf("<examples>")).toBeLessThan(msg.indexOf("<text>"));
+    expect(msg).toContain("<rewrite>\nOlder.\n</rewrite>");
+    expect(msg.endsWith("<text>\nNew text.\n</text>")).toBe(true);
+  });
+
+  it("formats refine notes", () => {
+    expect(buildRefineMessage("O", "D", ["fix x"])).toContain("<editor_notes>\n- fix x\n</editor_notes>");
   });
 });
 

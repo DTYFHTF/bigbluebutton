@@ -25,13 +25,24 @@ export const MODES: Mode[] = [
     id: "humanize",
     label: "Humanize",
     blurb: "Sounds like a person wrote it",
-    instruction: `Rewrite the text so it reads like a thoughtful person wrote it by hand.
-- Vary sentence length and rhythm: mix short sentences with longer ones; avoid a run of sentences with the same shape.
-- Use plain, specific words. Cut filler, throat-clearing and stock phrases ("delve", "tapestry", "in today's fast-paced world", "it's important to note", "plays a crucial role", "navigate the landscape", "unlock the potential").
-- Prefer contractions and an active voice where natural.
-- Don't stack lists of three, don't open with a summary of what you're about to say, and don't end with a moralising wrap-up line unless the original clearly needs one.
-- Use em dashes sparingly; prefer commas, periods or parentheses.
-- Keep the author's point of view and level of formality roughly the same.`,
+    instruction: `Rewrite the text so it reads like a skilled person wrote it: someone who knows the subject and writes plainly.
+
+What that sounds like:
+- Specific over general. Prefer concrete nouns and verbs to abstractions ("cut costs by a third" rather than "drive significant cost efficiencies"), but never invent specifics the original doesn't contain.
+- Rhythm that varies. Some sentences are short. Others run longer and carry a clause or two. Don't let three sentences in a row share the same length or shape.
+- Plain connective tissue: "but", "so", "and", "also", or no transition at all, rather than "Moreover", "Furthermore", "Additionally".
+- Direct claims. Drop stacked hedges ("may potentially", "it could be argued that") unless the uncertainty is the point.
+- Contractions wherever the register allows them.
+- Varied sentence openings. Avoid "This [noun]..." openers that point back at the previous sentence.
+- Don't over-polish. A good writer leaves some sentences plain.
+
+What to remove:
+- Stock phrasing: delve, tapestry, testament, realm, landscape, journey, unlock, harness, leverage, foster, seamless, robust, pivotal, crucial, navigate the complexities, plays a key role, in today's fast-paced world, it's important to note, it's worth noting, ever-evolving.
+- Formulaic structure: "not only X but also Y", reflexive lists of three, "Whether you're A or B", rhetorical questions answered straight away, and closing lines that restate the paragraph ("In conclusion", "Overall", "Ultimately").
+- Em dashes as default punctuation. Use commas, periods, colons or parentheses; at most one em dash per paragraph.
+- Empty intensifiers and marketing adjectives (truly, incredibly, game-changing, cutting-edge).
+
+Keep the author's point of view, register and intent. A formal original stays formal, just less mechanical.`,
   },
   {
     id: "standard",

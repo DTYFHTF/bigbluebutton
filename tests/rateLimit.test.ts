@@ -5,11 +5,15 @@ describe("checkRateLimit", () => {
   it("blocks after the limit and resets after the window", () => {
     const key = "test-" + Math.random();
     const t = 1_000_000;
-    for (let i = 0; i < 20; i++) expect(checkRateLimit(key, t).ok).toBe(true);
-    const blocked = checkRateLimit(key, t + 1000);
+    for (let i = 0; i < 5; i++) expect(checkRateLimit(key, 5, t).ok).toBe(true);
+    const blocked = checkRateLimit(key, 5, t + 1000);
     expect(blocked.ok).toBe(false);
     expect(blocked.retryAfter).toBe(59);
-    expect(checkRateLimit(key, t + 60_000).ok).toBe(true);
+    expect(checkRateLimit(key, 5, t + 60_000).ok).toBe(true);
+  });
+
+  it("is disabled with a limit of 0", () => {
+    for (let i = 0; i < 100; i++) expect(checkRateLimit("unlimited", 0).ok).toBe(true);
   });
 });
 

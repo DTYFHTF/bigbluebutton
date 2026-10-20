@@ -5,6 +5,7 @@ import { buildSegments } from "@/lib/segments";
 
 export interface RewriteOptions {
   mode: string;
+  quality: string;
   synonyms: number;
   dialect: string;
   frozen: string[];
@@ -15,12 +16,14 @@ interface Props {
   source: string;
   output: string;
   streaming: boolean;
+  editing: boolean;
   showChanges: boolean;
   options: RewriteOptions;
   onReplace: (start: number, end: number, text: string) => void;
+  onEdit: (text: string) => void;
 }
 
-export function OutputPane({ source, output, streaming, showChanges, options, onReplace }: Props) {
+export function OutputPane({ source, output, streaming, editing, showChanges, options, onReplace, onEdit }: Props) {
   const [active, setActive] = useState<number | null>(null);
   const [alternatives, setAlternatives] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,6 +78,18 @@ export function OutputPane({ source, output, streaming, showChanges, options, on
 
   if (!output && !streaming) {
     return <div className="output output-empty">Your rewritten text will appear here.</div>;
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        className="output output-edit"
+        value={output}
+        aria-label="Edit the rewrite"
+        autoFocus
+        onChange={(e) => onEdit(e.target.value)}
+      />
+    );
   }
 
   return (

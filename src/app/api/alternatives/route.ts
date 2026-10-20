@@ -1,8 +1,10 @@
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { FALLBACK_BETA, MODEL, describeApiError, getClient } from "@/lib/claude";
+import { describeApiError, fallbackParams, getClient } from "@/lib/claude";
+import { config } from "@/lib/config";
 import { buildSystemPrompt, paraphraseRequestSchema } from "@/lib/prompt";
 import { checkRateLimit, clientKey } from "@/lib/rateLimit";
+import { activeGuide } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -10,7 +12,7 @@ export const runtime = "nodejs";
 // user can click a sentence and pick a different phrasing.
 const requestSchema = paraphraseRequestSchema.omit({ text: true }).extend({
   sentence: z.string().trim().min(1).max(1500),
-  context: z.string().max(20000).default(""),
+  context: z.string().max(200_000).default(""),
 });
 
 const resultSchema = z.object({
@@ -18,7 +20,7 @@ const resultSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const limit = checkRateLimit(clientKey(request.headers));
+  const limit = checkRateLimit(clientKey(request.headers), config.rateLimitPerMin);
   if (!limit.ok) {
     return Response.json({ error: `Too many requests. Try again in ${limit.retryAfter}s.` }, { status: 429 });
   }
@@ -30,16 +32,15 @@ export async function POST(request: Request) {
   const { sentence, context, ...options } = parsed.data;
 
   const system =
-    buildSystemPrompt({ ...options, text: sentence }) +
+    buildSystemPrompt(options, { guideRules: activeGuide()?.rules }) +
     `\n\nFor this request, rewrite only the single sentence inside <sentence>. Give three alternatives that differ clearly from each other and from the current wording, and that fit the surrounding passage in <context>. Each alternative must be one sentence that could replace the original in place.`;
 
   try {
     const response = await getClient().beta.messages.parse({
-      model: MODEL,
+      model: config.bestModel,
       max_tokens: 4000,
       output_config: { effort: "low", format: betaZodOutputFormat(resultSchema) },
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...fallbackParams(config.bestModel),
       system,
       messages: [
         {

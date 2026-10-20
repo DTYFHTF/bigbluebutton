@@ -49,9 +49,30 @@ const PHRASES: Array<[RegExp, string]> = [
   [/\bunderscor(?:e|es|ed|ing)\b/gi, "shows, highlights"],
 ];
 
-export function findAiPhrases(text: string): PhraseHit[] {
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Phrases the learner added from the user's feedback, as literal,
+// case-insensitive, whole-word patterns.
+export function compileExtraPhrases(extra: Array<{ phrase: string; suggestion: string }>): Array<[RegExp, string]> {
+  return extra
+    .filter((p) => p.phrase.trim())
+    .map((p) => [
+      new RegExp(
+        `(?<![\\p{L}\\p{N}])${escapeRegExp(p.phrase.trim()).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`,
+        "giu",
+      ),
+      p.suggestion,
+    ]);
+}
+
+export function findAiPhrases(
+  text: string,
+  extra: Array<{ phrase: string; suggestion: string }> = [],
+): PhraseHit[] {
   const hits: PhraseHit[] = [];
-  for (const [pattern, suggestion] of PHRASES) {
+  for (const [pattern, suggestion] of [...PHRASES, ...compileExtraPhrases(extra)]) {
     pattern.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(text)) !== null) {

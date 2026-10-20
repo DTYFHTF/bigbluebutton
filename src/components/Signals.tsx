@@ -10,24 +10,25 @@ interface Props {
   source: string;
   output: string;
   frozen: string[];
+  extraPhrases?: Array<{ phrase: string; suggestion: string }>;
 }
 
 // Before/after writing signals. These are style heuristics to guide the
 // writer, not a score from (or a promise about) any AI-detection product.
-export function Signals({ source, output, frozen }: Props) {
+export function Signals({ source, output, frozen, extraPhrases = [] }: Props) {
   const stats = useMemo(() => {
     const before = sentenceRhythm(source);
     const after = sentenceRhythm(output);
     return {
       words: [countWords(source), countWords(output)],
-      robotic: [findAiPhrases(source).length, findAiPhrases(output).length],
+      robotic: [findAiPhrases(source, extraPhrases).length, findAiPhrases(output, extraPhrases).length],
       variety: [before.stdev, after.stdev],
       avgLength: [before.mean, after.mean],
       dashes: [countEmDashes(source), countEmDashes(output)],
       changed: changedRatio(diffWords(source, output)),
       missing: missingFrozenTerms(source, output, frozen),
     };
-  }, [source, output, frozen]);
+  }, [source, output, frozen, extraPhrases]);
 
   const rows: Array<[string, string, string, string]> = [
     ["Words", String(stats.words[0]), String(stats.words[1]), ""],
