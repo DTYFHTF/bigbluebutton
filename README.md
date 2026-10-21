@@ -19,7 +19,7 @@ Built with Next.js (App Router, TypeScript), the Claude API and Node's built-in 
 
 ## Getting started
 
-Requires Node.js 22.13+ (it uses the built-in `node:sqlite`).
+Requires **Node.js 22.13 or newer** (it uses the built-in `node:sqlite`). Check with `node -v`; on a Mac, `brew install node@22` or `nvm install` (the repo has an `.nvmrc`) fixes an old version. With an older Node, `npm install` warns and the app fails on the first rewrite.
 
 ```bash
 npm install
