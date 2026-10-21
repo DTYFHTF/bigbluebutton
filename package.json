@@ -9,8 +9,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "eval": "tsx scripts/eval.mts",
-    "learn": "tsx scripts/learn.mts"
+    "eval": "tsx --env-file-if-exists=.env.local scripts/eval.mts",
+    "learn": "tsx --env-file-if-exists=.env.local scripts/learn.mts",
+    "doctor": "tsx --env-file-if-exists=.env.local scripts/doctor.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.136.0",

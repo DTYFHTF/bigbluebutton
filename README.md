@@ -29,6 +29,17 @@ npm run dev                  # http://localhost:3000
 
 Everything you write and all feedback is stored locally in `data/humanly.db`.
 
+### Something not working? Run the doctor
+
+```bash
+npm run doctor                  # checks Node, Ollama, models, disk space; runs a test rewrite
+npm run doctor -- --fix         # also starts Ollama, creates .env.local, and uses an installed model
+npm run doctor -- --fix --pull  # also downloads llama3.1:8b if you have no model at all
+npm run doctor -- --text "Your own text to try"
+```
+
+It prints what is wrong and the exact command to fix it.
+
 ### Choosing a provider (free options included)
 
 Set `HUMANLY_PROVIDER` in `.env.local`:
@@ -95,6 +106,7 @@ The learner runs automatically once enough new feedback builds up. You can also 
 ```bash
 npm test                                   # unit tests
 npm run typecheck
+npm run doctor                             # environment check + test rewrite
 npm run eval                               # Best quality, all eval passages
 npm run eval -- --quality fast --limit 4   # quicker check
 npm run learn -- --force                   # learning round from the CLI
