@@ -21,7 +21,7 @@ export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
   anthropic: { label: "Anthropic", baseUrl: null, keyEnv: "ANTHROPIC_API_KEY", model: "claude-haiku-5-5", minIntervalMs: 0 },
   ollama: {
     label: "Ollama",
-    baseUrl: "http://localhost:11434/v1",
+    baseUrl: "http://127.0.0.1:11434/v1",
     keyEnv: "OLLAMA_API_KEY",
     keyOptional: true,
     model: "llama3.1:8b",
