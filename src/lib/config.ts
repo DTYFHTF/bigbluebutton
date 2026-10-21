@@ -1,12 +1,14 @@
 // Server-side settings, all overridable through environment variables.
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
-export type ProviderId = "anthropic" | "nvidia" | "openrouter" | "groq" | "custom";
+export type ProviderId = "anthropic" | "ollama" | "nvidia" | "openrouter" | "groq" | "custom";
 
 interface ProviderPreset {
   label: string;
   baseUrl: string | null;
   keyEnv: string;
+  // Local servers don't need a key.
+  keyOptional?: boolean;
   // One model for every role; override per role with HUMANLY_*_MODEL.
   model: string;
   // Pause between calls (ms) to stay under a free tier's per-minute cap.
@@ -17,6 +19,14 @@ interface ProviderPreset {
 // change, so set HUMANLY_*_MODEL if one is retired.
 export const PROVIDERS: Record<ProviderId, ProviderPreset> = {
   anthropic: { label: "Anthropic", baseUrl: null, keyEnv: "ANTHROPIC_API_KEY", model: "claude-haiku-5-5", minIntervalMs: 0 },
+  ollama: {
+    label: "Ollama",
+    baseUrl: "http://localhost:11434/v1",
+    keyEnv: "OLLAMA_API_KEY",
+    keyOptional: true,
+    model: "llama3.1:8b",
+    minIntervalMs: 0,
+  },
   nvidia: {
     label: "NVIDIA",
     baseUrl: "https://integrate.api.nvidia.com/v1",
@@ -59,6 +69,7 @@ export const config = {
   // OpenAI-compatible providers only.
   baseUrl: (process.env.HUMANLY_BASE_URL ?? preset.baseUrl ?? "").replace(/\/+$/, ""),
   apiKeyEnv: preset.keyEnv,
+  apiKeyOptional: preset.keyOptional ?? false,
   minIntervalMs: num("HUMANLY_MIN_INTERVAL_MS", preset.minIntervalMs),
   // Single-pass rewrites ("Fast" quality).
   fastModel: process.env.HUMANLY_FAST_MODEL ?? defaultModel,

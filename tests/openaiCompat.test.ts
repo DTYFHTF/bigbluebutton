@@ -84,6 +84,13 @@ describe("chatRequest", () => {
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer k");
   });
 
+  it("sends no Authorization header without a key", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await chatRequest({ ...req, apiKey: undefined });
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ "Content-Type": "application/json" });
+  });
+
   it("does not retry client errors", async () => {
     const fetchMock = vi.fn().mockImplementation(async () => new Response("nope", { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);

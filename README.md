@@ -36,6 +36,7 @@ Set `HUMANLY_PROVIDER` in `.env.local`:
 | Provider | Cost | Key |
 | --- | --- | --- |
 | `anthropic` (default) | Paid, best quality | `ANTHROPIC_API_KEY` from console.anthropic.com |
+| `ollama` | Free, runs on your machine | none (install Ollama, then `ollama pull llama3.1:8b`) |
 | `nvidia` | Free tier, rate-limited | `NVIDIA_API_KEY` from build.nvidia.com |
 | `openrouter` | Free `:free` models, rate-limited | `OPENROUTER_API_KEY` from openrouter.ai/keys |
 | `groq` | Free tier, rate-limited | `GROQ_API_KEY` from console.groq.com |
@@ -47,7 +48,7 @@ HUMANLY_PROVIDER=nvidia
 NVIDIA_API_KEY=nvapi-...
 ```
 
-Free providers use a default Llama 70B model (override with `HUMANLY_*_MODEL` if it is retired). They get 2 drafts instead of 3, and calls are spaced out to stay under per-minute caps, so a Best rewrite takes longer. The engine asks free models for JSON and validates it, retrying once if the reply is malformed. Run `npm run eval` on each provider and compare the mean scores before settling on one. The scores come from the configured judge model, so only compare runs that use the same judge model.
+Local models need the app and Ollama on the same machine, and quality depends on model size: 7–8B models run on most laptops but rewrite and judge noticeably worse than Claude. Free hosted providers use a default Llama 70B model (override with `HUMANLY_*_MODEL` if it is retired). They get 2 drafts instead of 3, and calls are spaced out to stay under per-minute caps, so a Best rewrite takes longer. The engine asks free models for JSON and validates it, retrying once if the reply is malformed. Run `npm run eval` on each provider and compare the mean scores before settling on one. The scores come from the configured judge model, so only compare runs that use the same judge model.
 
 ### Configuration
 

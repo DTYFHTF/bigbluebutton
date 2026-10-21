@@ -50,7 +50,7 @@ const spacer = createSpacer(config.minIntervalMs);
 
 function openAiTarget() {
   const apiKey = process.env[config.apiKeyEnv];
-  if (!apiKey) throw new HttpError(401, `Set ${config.apiKeyEnv} in .env.local.`);
+  if (!apiKey && !config.apiKeyOptional) throw new HttpError(401, `Set ${config.apiKeyEnv} in .env.local.`);
   if (!config.baseUrl) throw new HttpError(400, "Set HUMANLY_BASE_URL for the custom provider.");
   return { baseUrl: config.baseUrl, apiKey };
 }
@@ -170,11 +170,17 @@ export function describeApiError(error: unknown): { status: number; message: str
       return { status: 500, message: `The ${config.providerLabel} API key is missing or invalid. Check ${config.apiKeyEnv}.` };
     }
     if (error.status === 404) {
-      return { status: 500, message: "A configured model isn't available on this provider. Check HUMANLY_*_MODEL." };
+      const hint = config.provider === "ollama" ? " Pull it first with `ollama pull <model>`." : "";
+      return { status: 500, message: `A configured model isn't available on this provider. Check HUMANLY_*_MODEL.${hint}` };
     }
     if (error.status === 429) return { status: 429, message: "The provider's rate limit was hit. Wait a moment and try again." };
     if (error.status === 400) return { status: 400, message: `The provider rejected the request: ${error.body.slice(0, 200)}` };
     return { status: 502, message: "The rewriting service had a problem. Try again." };
+  }
+  // fetch() rejects with a TypeError when nothing is listening at the address.
+  if (error instanceof TypeError && config.provider !== "anthropic") {
+    const hint = config.provider === "ollama" ? " Is Ollama running? Start it with `ollama serve`." : "";
+    return { status: 502, message: `Couldn't reach ${config.providerLabel} at ${config.baseUrl}.${hint}` };
   }
   if (error instanceof Anthropic.AuthenticationError) {
     return { status: 500, message: "The server's Anthropic API key is missing or invalid." };

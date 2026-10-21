@@ -101,7 +101,8 @@ export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator
 
 export interface ChatRequest {
   baseUrl: string;
-  apiKey: string;
+  // Omitted for local servers that don't authenticate.
+  apiKey?: string;
   model: string;
   system: string;
   user: string;
@@ -129,7 +130,10 @@ export async function chatRequest(req: ChatRequest, retries = 4): Promise<Respon
     const res = await fetch(`${req.baseUrl}/chat/completions`, {
       method: "POST",
       signal: req.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${req.apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        ...(req.apiKey ? { Authorization: `Bearer ${req.apiKey}` } : {}),
+      },
       body: JSON.stringify({
         model: req.model,
         max_tokens: req.maxTokens,
