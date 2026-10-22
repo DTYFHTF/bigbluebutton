@@ -81,9 +81,12 @@ export const config = {
   // favouring its own writing.
   judgeModel: process.env.HUMANLY_JUDGE_MODEL ?? defaultModel,
   judgeEffort: (process.env.HUMANLY_JUDGE_EFFORT ?? "medium") as Effort,
-  // Number of competing drafts in "Best" quality. Free tiers get fewer by
-  // default so a rewrite stays within their request caps.
-  candidates: Math.max(1, Math.min(5, num("HUMANLY_CANDIDATES", isAnthropic ? 3 : 2))),
+  // Number of competing drafts in "Best" quality. Hosted free tiers get fewer
+  // so a rewrite stays within their request caps; a local model gets one,
+  // because parallel requests compete for the same memory and slow it down.
+  candidates: Math.max(1, Math.min(5, num("HUMANLY_CANDIDATES", isAnthropic ? 3 : providerId === "ollama" ? 1 : 2))),
+  // Quality preselected in the UI. Best chains 4+ model calls, which is slow on a laptop.
+  defaultQuality: ((process.env.HUMANLY_DEFAULT_QUALITY ?? (providerId === "ollama" ? "fast" : "best")) === "fast" ? "fast" : "best") as "fast" | "best",
   // 0 disables the cap / the limiter.
   maxWords: num("HUMANLY_MAX_WORDS", 0),
   rateLimitPerMin: num("HUMANLY_RATE_LIMIT_PER_MIN", 0),

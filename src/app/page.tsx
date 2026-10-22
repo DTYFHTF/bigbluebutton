@@ -4,5 +4,5 @@ import { config } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  return <Paraphraser maxWords={config.maxWords} />;
+  return <Paraphraser maxWords={config.maxWords} defaultQuality={config.defaultQuality} />;
 }

@@ -33,15 +33,16 @@ const SAMPLE = `In today's fast-paced digital landscape, effective communication
 const SYNONYM_LABELS = ["", "Minimal", "Light", "Balanced", "Strong", "Maximum"];
 const QUALITY_KEY = "humanly:quality";
 
-function readQuality(): Quality {
+function readQuality(fallback: Quality): Quality {
   try {
-    return window.localStorage.getItem(QUALITY_KEY) === "fast" ? "fast" : "best";
+    const saved = window.localStorage.getItem(QUALITY_KEY);
+    return saved === "fast" || saved === "best" ? saved : fallback;
   } catch {
-    return "best";
+    return fallback;
   }
 }
 
-export function Paraphraser({ maxWords }: { maxWords: number }) {
+export function Paraphraser({ maxWords, defaultQuality }: { maxWords: number; defaultQuality: Quality }) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   // What the pipeline returned, so hand edits can be told apart from it.
@@ -55,7 +56,8 @@ export function Paraphraser({ maxWords }: { maxWords: number }) {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<ModeId>("humanize");
-  const [quality, setQuality] = useState<Quality>("best");
+  const [quality, setQuality] = useState<Quality>(defaultQuality);
+  const [elapsed, setElapsed] = useState(0);
   const [synonyms, setSynonyms] = useState(3);
   const [dialect, setDialect] = useState<Dialect>("en-US");
   const [frozen, setFrozen] = useState<string[]>([]);
@@ -71,13 +73,22 @@ export function Paraphraser({ maxWords }: { maxWords: number }) {
 
   useEffect(() => {
     setHistory(loadHistory());
-    setQuality(readQuality());
+    setQuality(readQuality(defaultQuality));
     fetch("/api/phrases")
       .then((r) => (r.ok ? r.json() : { phrases: [] }))
       .then((d) => setPhrases(d.phrases ?? []))
       .catch(() => {});
   }, []);
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // A running clock, so a slow model never looks frozen.
+  useEffect(() => {
+    if (status !== "streaming") return;
+    const started = Date.now();
+    setElapsed(0);
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [status]);
 
   // Hand edits and swapped-in alternatives are the strongest learning
   // signal; save the latest version shortly after the user stops changing it.
@@ -379,7 +390,10 @@ export function Paraphraser({ maxWords }: { maxWords: number }) {
             {streaming && stage && (
               <div className="stage" role="status">
                 <span className="spinner" aria-hidden="true" />
-                {stage}
+                {stage} · {elapsed}s
+                {elapsed >= 20 && (
+                  <span className="muted"> · Still working. The first request is slow while the model loads.</span>
+                )}
               </div>
             )}
             <OutputPane

@@ -102,6 +102,7 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
       stage: "drafting",
       message: angles.length > 1 ? `Writing ${angles.length} drafts…` : "Writing a draft…",
     });
+    let finished = 0;
     const settled = await Promise.allSettled(
       angles.map((angle) =>
         draftOnce(req, {
@@ -111,6 +112,9 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
           angle: angles.length > 1 ? angle : undefined,
           useExamples: opts.useExamples,
           signal,
+        }).then((text) => {
+          emit({ type: "stage", stage: "drafting", message: `Draft ${++finished} of ${angles.length} done…` });
+          return text;
         }),
       ),
     );
