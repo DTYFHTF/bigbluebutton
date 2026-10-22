@@ -37,3 +37,40 @@ describe("cleanOutput", () => {
     expect(cleanOutput("He said hi.", '"Hi" he said, and "bye" too."')).toBe('"Hi" he said, and "bye" too."');
   });
 });
+
+describe("cleanOutput regressions found in review", () => {
+  it("keeps a real first paragraph that starts like a chat reply", () => {
+    const input = "Sure, the meeting is on Monday and everyone from the design team should attend.";
+    const out = "Sure, the meeting is on Monday.\n\nEveryone from the design team should attend.";
+    expect(cleanOutput(input, out)).toBe(out);
+    const lead = "Here's what we learned from the textbooks:\n\nThey cover the basics well.";
+    expect(cleanOutput("We learned that the textbooks cover the basics well.", lead)).toBe(lead);
+  });
+
+  it("keeps real closing lines that mention changes or tone", () => {
+    const input = "The rota moves to Monday. Let me know if the change affects your plans.";
+    const out = "The rota now starts on Monday.\n\nLet me know if the change affects your plans.";
+    expect(cleanOutput(input, out)).toBe(out);
+    const memo = "We hit the milestone. Notes: keep the tone of the launch email friendly.";
+    const memoOut = "We reached the milestone.\n\nNotes: keep the launch email's tone friendly.";
+    expect(cleanOutput(memo, memoOut)).toBe(memoOut);
+  });
+
+  it("keeps a closing paragraph that carries a number from the input", () => {
+    const input = "Budget is $1.8 million. This version of the plan is final.";
+    const out = "The budget stands at $1.8 million.\n\nThis version of the plan, at 1.8 million, is final.";
+    expect(cleanOutput(input, out)).toBe(out);
+  });
+
+  it("still strips chat wrappers", () => {
+    expect(cleanOutput("The cat sat.", "Sure! Here's a more natural version:\n\nThe cat was sitting.")).toBe("The cat was sitting.");
+    expect(cleanOutput("The cat sat.", "The cat was sitting.\n\nLet me know if you'd like any further changes.")).toBe("The cat was sitting.");
+    expect(cleanOutput("The cat sat.", "The cat was sitting.\n\nThis version keeps the original meaning.")).toBe("The cat was sitting.");
+  });
+
+  it("doesn't strip when the input already had that many lines", () => {
+    const input = "Dear Sam,\nThe cat sat.\nBest,\nJo";
+    const out = "Sure, here is the rewritten text:\n\nDear Sam,\nThe cat was sitting.";
+    expect(cleanOutput(input, out)).toBe(out);
+  });
+});

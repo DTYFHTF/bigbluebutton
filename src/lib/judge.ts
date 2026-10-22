@@ -84,9 +84,10 @@ export async function judge(
   const blocks = order
     .map((idx, pos) => `<candidate label="${LABELS[pos]}">\n${candidates[idx]}\n</candidate>`)
     .join("\n\n");
-  // Hosted Claude gets the full rubric; anything else (often a small model
-  // with a 4K window) gets the short task text and fewer issues to list.
-  const strong = config.judge.provider === "anthropic";
+  // A judge with a small context window (a local model) gets the short task
+  // text, fewer issues to list and a small output budget; hosted judges get
+  // the full rubric.
+  const strong = config.judge.numCtx <= 0;
   const maxIssues = strong ? 6 : 3;
 
   const { evaluations } = await generateJson(

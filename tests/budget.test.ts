@@ -37,3 +37,15 @@ describe("chunkText", () => {
     expect(chunks.every((c) => !/3\.\s|^5 dollars/.test(c.text))).toBe(true);
   });
 });
+
+describe("chunkText without sentence punctuation (review fix)", () => {
+  it("splits at clauses or spaces and rejoins exactly", () => {
+    const text = Array.from({ length: 80 }, (_, i) => `item ${i}, with a note`).join("; ");
+    const chunks = chunkText(text, 50);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(estimateTokens(c.text)).toBeLessThanOrEqual(50);
+    expect(joinChunks(chunks)).toBe(text);
+    const noSpaces = "x".repeat(600);
+    expect(joinChunks(chunkText(noSpaces, 50))).toBe(noSpaces);
+  });
+});

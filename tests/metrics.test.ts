@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lexicalChange, missingNumbers, numbersIn, sentencesReworked, words } from "@/lib/metrics";
+import { copiedSentences, lexicalChange, missingNumbers, numbersIn, sentencesReworked, words } from "@/lib/metrics";
 
 describe("words", () => {
   it("lowercases and keeps contractions and hyphenated words", () => {
@@ -36,5 +36,31 @@ describe("numbers", () => {
     expect(missingNumbers("We hired 14 people and opened 2 offices.", "We hired fourteen people and opened two offices.")).toEqual([]);
     expect(missingNumbers("Revenue grew 18% to $4.2 million.", "Revenue grew strongly to $4.2 million.")).toEqual(["18"]);
     expect(missingNumbers("3 and 3", "3")).toEqual(["3"]);
+  });
+});
+
+describe("number edge cases (review fixes)", () => {
+  it("doesn't treat the pronoun 'one' as the number 1", () => {
+    expect(missingNumbers("Only 1 office opened.", "No one opened an office.")).toEqual(["1"]);
+    expect(missingNumbers("Only 1 office opened.", "Just one office opened.")).toEqual([]);
+  });
+
+  it("ignores leading zeros and reads compound number words", () => {
+    expect(missingNumbers("Doors open at 09:00.", "Doors open at 9:00.")).toEqual([]);
+    expect(missingNumbers("We saw a 23% rise.", "We saw a twenty-three percent rise.")).toEqual([]);
+    expect(missingNumbers("A 30-hour week.", "A thirty-hour week.")).toEqual([]);
+    expect(numbersIn("twenty three people")).toEqual(["23"]);
+  });
+});
+
+describe("copiedSentences", () => {
+  const input = "Our team grew to 14 people this year. We opened an office in Lisbon and hired two designers.";
+  it("counts verbatim sentences, including in a padded copy", () => {
+    expect(copiedSentences(input, input)).toBe(2);
+    expect(copiedSentences(input, `${input} It was a great year for everyone involved.`)).toBe(2);
+  });
+
+  it("doesn't count a rewrite that reuses the content words", () => {
+    expect(copiedSentences(input, "This year the team reached 14 people. A Lisbon office opened, and two designers joined us.")).toBe(0);
   });
 });

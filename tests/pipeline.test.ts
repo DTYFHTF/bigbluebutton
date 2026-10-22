@@ -74,7 +74,7 @@ describe("Fast quality", () => {
     const result = await runPipeline(req(), { emit, persist: false });
     expect(result.output).toBe(FRESH);
     expect(result.detail).toMatch(/reworked/);
-    expect(streamText.mock.calls[1][0].user).toMatch(/kept too much of the original wording/);
+    expect(streamText.mock.calls[1][0].user).toMatch(/changed almost none of the wording/);
     expect(list.some((e) => e.type === "reset")).toBe(true);
     expect(result.metrics.lexicalChange).toBeGreaterThan(0.3);
     expect(result.scores?.naturalness).toBe(8);
@@ -121,7 +121,78 @@ describe("Fast quality", () => {
   });
 });
 
+describe("variety retry (review fixes)", () => {
+  it("keeps the first draft when the retry fails", async () => {
+    streamText.mockResolvedValueOnce(COPY).mockRejectedValueOnce(new Error("HTTP 429"));
+    judgeAll();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runPipeline(req(), { persist: false });
+    expect(result.output).toBe(COPY);
+    expect(result.detail).toBe("Single pass");
+  });
+
+  it("doesn't retry Shorten, which works by deleting words", async () => {
+    streamText.mockResolvedValueOnce("Our team grew to 14 people. We opened in Lisbon and hired two designers.");
+    judgeAll();
+    await runPipeline(req({ mode: "shorten" }), { persist: false });
+    expect(streamText).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a proper expansion in Expand mode", async () => {
+    const expanded =
+      "This year our team reached 14 people, which is a big step for a small company. We set up a new office in Lisbon to be closer to clients there, and we brought on two designers to strengthen the product side.";
+    streamText.mockResolvedValueOnce(COPY).mockResolvedValueOnce(expanded);
+    judgeAll();
+    const result = await runPipeline(req({ mode: "expand", synonyms: 5 }), { persist: false });
+    expect(result.output).toBe(expanded);
+  });
+
+  it("rejects a retry that overshoots a low slider setting", async () => {
+    const heavy = "Headcount: fourteen, up sharply. A Portuguese base launched. Two creatives were recruited. 14 total.";
+    streamText.mockResolvedValueOnce(COPY).mockResolvedValueOnce(heavy);
+    judgeAll();
+    const result = await runPipeline(req({ synonyms: 1 }), { persist: false });
+    expect(result.output).toBe(COPY);
+    expect(streamText.mock.calls[1][0].user).toMatch(/change about 10% of the words/);
+  });
+
+  it("replaces an empty first draft", async () => {
+    streamText.mockResolvedValueOnce("<text></text>").mockResolvedValueOnce(FRESH);
+    judgeAll();
+    expect((await runPipeline(req(), { persist: false })).output).toBe(FRESH);
+  });
+});
+
 describe("Best quality", () => {
+  it("adopts a variety retry only if it holds up against the judged draft", async () => {
+    streamText.mockResolvedValueOnce(COPY).mockResolvedValueOnce(FRESH);
+    // The retry loses meaning in the side-by-side check, so the judged draft stays.
+    generateJson.mockImplementation(async (_s: unknown, c: Call) => ({
+      evaluations: [...c.user.matchAll(/<candidate label="(\w)">\n([\s\S]*?)\n<\/candidate>/g)].map(([, label, text]) => ({
+        label,
+        // A perfect draft with no issues skips the polish step.
+        naturalness: 10,
+        meaning: text === FRESH ? 6 : 10,
+        fluency: 10,
+        mode_fit: 10,
+        issues: [],
+      })),
+    }));
+    const result = await runPipeline(req({ quality: "best" }), { persist: false });
+    expect(result.output).toBe(COPY);
+    expect(result.detail).not.toMatch(/reworked/);
+  });
+
+  it("ships the judged draft when the polish fails", async () => {
+    streamText.mockResolvedValueOnce(FRESH).mockRejectedValueOnce(new Error("The model stopped before it finished"));
+    judgeAll(7, [{ quote: "This year", problem: "flat", fix: "vary" }]);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await runPipeline(req({ quality: "best" }), { persist: false });
+    expect(result.output).toBe(FRESH);
+    expect(result.scores?.naturalness).toBe(7);
+    expect(result.detail).toMatch(/polish failed/);
+  });
+
   it("ships the draft unpolished when the judge fails", async () => {
     streamText.mockResolvedValueOnce(FRESH);
     generateJson.mockRejectedValue(new Error("judge down"));

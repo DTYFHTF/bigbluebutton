@@ -113,6 +113,21 @@ describe("generateJson (OpenAI-compatible)", () => {
   });
 });
 
+describe("generateJson truncation (review fix)", () => {
+  it("reports a cut-off JSON reply as truncated instead of retrying", async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ choices: [{ message: { content: '{"items":[' }, finish_reason: "length" }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(llm.generateJson(z.object({ items: z.array(z.string()) }), base)).rejects.toBeInstanceOf(llm.OutputTruncatedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("describeApiError", () => {
   it("explains context overflows and truncation", () => {
     expect(llm.describeApiError(new budget.ContextOverflowError(900, 300, 1024)).status).toBe(413);

@@ -64,11 +64,16 @@ export function chunkText(text: string, maxTokens: number): Chunk[] {
       return;
     }
     // Keep the whitespace that originally followed each sentence, so joining
-    // reproduces the paragraph exactly.
+    // reproduces the paragraph exactly. Text with no sentence punctuation is
+    // split further at clause punctuation, then at spaces.
     let gap = separator;
     for (const { text: sentence } of splitSentences(paragraph)) {
       const body = sentence.trimEnd();
-      if (body) units.push({ separator: gap, text: body });
+      if (body) {
+        for (const piece of splitLong(body, maxTokens)) {
+          units.push({ separator: piece.first ? gap : piece.gap, text: piece.text });
+        }
+      }
       gap = sentence.slice(body.length) || " ";
     }
   });
@@ -81,6 +86,28 @@ export function chunkText(text: string, maxTokens: number): Chunk[] {
     else chunks.push({ ...unit });
   }
   return chunks;
+}
+
+// Splits a sentence that alone exceeds maxTokens: after clause punctuation
+// (; : , and dashes) where possible, otherwise at the last space that fits.
+function splitLong(sentence: string, maxTokens: number): Array<{ text: string; gap: string; first: boolean }> {
+  if (estimateTokens(sentence) <= maxTokens) return [{ text: sentence, gap: "", first: true }];
+  const maxChars = Math.max(20, Math.floor(maxTokens * CHARS_PER_TOKEN));
+  const pieces: Array<{ text: string; gap: string; first: boolean }> = [];
+  let rest = sentence;
+  let gap = "";
+  while (rest.length > maxChars) {
+    const window = rest.slice(0, maxChars + 1);
+    const clause = Math.max(window.lastIndexOf("; "), window.lastIndexOf(": "), window.lastIndexOf(", "), window.lastIndexOf(" — "));
+    const space = window.lastIndexOf(" ");
+    const cut = clause > maxChars / 3 ? clause + 1 : space > 0 ? space : maxChars;
+    pieces.push({ text: rest.slice(0, cut).trimEnd(), gap, first: pieces.length === 0 });
+    const after = rest.slice(cut);
+    gap = after.match(/^\s*/)?.[0] || "";
+    rest = after.slice(gap.length);
+  }
+  if (rest) pieces.push({ text: rest, gap, first: pieces.length === 0 });
+  return pieces;
 }
 
 export function joinChunks(chunks: Chunk[]): string {

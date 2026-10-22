@@ -49,6 +49,28 @@ export function sentencesReworked(input: string, output: string): number {
   return reworked / outSentences.length;
 }
 
+function bigrams(list: string[]): string[] {
+  return list.length < 2 ? list : list.slice(1).map((w, i) => `${list[i]} ${w}`);
+}
+
+// Number of input sentences that still have a near-copy in the output: an
+// output sentence containing at least 60% of the input sentence's word pairs.
+// Word pairs, not single words, because a genuine rewrite keeps the content
+// words (names, numbers, key nouns) but not their original sequence.
+export function copiedSentences(input: string, output: string): number {
+  const outSentences = splitSentences(output)
+    .map((s) => new Set(bigrams(words(s.text))))
+    .filter((s) => s.size > 0);
+  let copied = 0;
+  for (const { text } of splitSentences(input)) {
+    const source = bigrams(words(text));
+    if (source.length === 0) continue;
+    const kept = Math.max(0, ...outSentences.map((out) => source.filter((b) => out.has(b)).length / source.length));
+    if (kept >= 0.6) copied++;
+  }
+  return copied;
+}
+
 const NUMBER_WORDS: Record<string, string> = {
   zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9",
   ten: "10", eleven: "11", twelve: "12", thirteen: "13", fourteen: "14", fifteen: "15", sixteen: "16",
@@ -56,11 +78,49 @@ const NUMBER_WORDS: Record<string, string> = {
   sixty: "60", seventy: "70", eighty: "80", ninety: "90", hundred: "100", thousand: "1000",
 };
 
-// Numbers in a text, normalised so "1,200" matches "1200" and "nine" matches "9".
+const UNITS = new Set(["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]);
+const TENS = new Set(["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]);
+// "one" is often a pronoun: "no one", "the one in Leeds", "one of them".
+const PRONOUN_BEFORE = new Set(["no", "any", "every", "each", "some", "the", "this", "that", "which", "anyone", "someone"]);
+const PRONOUN_AFTER = new Set(["of", "another"]);
+
+const DIGITS = /\d[\d,]*(?:\.\d+)?/g;
+
+// "1,200" -> "1200", "03" -> "3"; decimals are kept as written.
+function normalizeDigits(n: string): string {
+  const plain = n.replace(/,(?=\d{3}\b)/g, "").replace(/,$/, "");
+  return plain.includes(".") ? plain : plain.replace(/^0+(?=\d)/, "");
+}
+
+function spelledNumbers(text: string): string[] {
+  const list = words(text);
+  const found: string[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const parts = list[i].split("-");
+    for (let j = 0; j < parts.length; j++) {
+      const part = parts[j];
+      if (!(part in NUMBER_WORDS)) continue;
+      // Tens followed by a unit, hyphenated or not: "twenty-three", "twenty three".
+      const nextPart = parts[j + 1] ?? (j === parts.length - 1 ? list[i + 1] : undefined);
+      if (TENS.has(part) && nextPart && UNITS.has(nextPart)) {
+        found.push(String(Number(NUMBER_WORDS[part]) + Number(NUMBER_WORDS[nextPart])));
+        if (parts[j + 1] !== undefined) j++;
+        else i++;
+        continue;
+      }
+      if (part === "one" && parts.length === 1 && (PRONOUN_BEFORE.has(list[i - 1] ?? "") || PRONOUN_AFTER.has(list[i + 1] ?? ""))) {
+        continue;
+      }
+      found.push(NUMBER_WORDS[part]);
+    }
+  }
+  return found;
+}
+
+// Numbers in a text, normalised so "1,200" matches "1200", "03" matches "3",
+// and "nine" or "twenty-three" match 9 and 23.
 export function numbersIn(text: string): string[] {
-  const digits = (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => n.replace(/,(?=\d{3}\b)/g, "").replace(/,$/, ""));
-  const spelled = words(text).flatMap((w) => (w in NUMBER_WORDS ? [NUMBER_WORDS[w]] : []));
-  return [...digits, ...spelled];
+  return [...(text.match(DIGITS) ?? []).map(normalizeDigits), ...spelledNumbers(text)];
 }
 
 // Numbers written as digits in the input that the output no longer contains
@@ -69,7 +129,7 @@ export function numbersIn(text: string): string[] {
 export function missingNumbers(input: string, output: string): string[] {
   const available = counts(numbersIn(output));
   const missing: string[] = [];
-  for (const n of (input.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((x) => x.replace(/,(?=\d{3}\b)/g, "").replace(/,$/, ""))) {
+  for (const n of (input.match(DIGITS) ?? []).map(normalizeDigits)) {
     const left = available.get(n) ?? 0;
     if (left > 0) available.set(n, left - 1);
     else missing.push(n);

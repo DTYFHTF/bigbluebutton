@@ -195,11 +195,14 @@ if (!values["skip-ours"]) {
   mean = summarize(rows, "Humanly");
 
   if (repeat > 1) {
-    // Run-to-run spread per passage: differences smaller than this are noise.
-    const spreads = passages.map((p) => {
-      const scores = rows.filter((r) => r.id === p.id && r.scores).map((r) => r.scores!.overall);
-      return scores.length > 1 ? Math.max(...scores) - Math.min(...scores) : 0;
-    });
+    // Run-to-run spread per passage and slider level: differences smaller
+    // than this are noise.
+    const spreads = passages.flatMap((p) =>
+      levels.map((level) => {
+        const scores = rows.filter((r) => r.id === p.id && r.synonyms === level && r.scores).map((r) => r.scores!.overall);
+        return scores.length > 1 ? Math.max(...scores) - Math.min(...scores) : 0;
+      }),
+    );
     console.log(`  run-to-run spread in overall score: up to ${Math.max(...spreads).toFixed(2)}`);
   }
 }

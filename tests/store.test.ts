@@ -35,13 +35,16 @@ function run(id: string, input: string, output: string, mode: "humanize" | "form
 }
 
 describe("store", () => {
+  // Tests share one database and may run in any order, so they compare
+  // counts before and after rather than assuming an empty store.
   it("records feedback and queues it for learning", () => {
+    const before = store.countPendingFeedback();
     run("r1", "Our sales went up a lot this quarter.", "Sales rose sharply this quarter.");
-    expect(store.countPendingFeedback()).toBe(0);
+    expect(store.countPendingFeedback()).toBe(before);
     expect(store.recordFeedback("r1", { rating: 1, note: "good" })).toBe(true);
-    expect(store.countPendingFeedback()).toBe(1);
+    expect(store.countPendingFeedback()).toBe(before + 1);
     store.markUsedInLearning(["r1"]);
-    expect(store.countPendingFeedback()).toBe(0);
+    expect(store.countPendingFeedback()).toBe(before);
     expect(store.recordFeedback("missing", { rating: 1 })).toBe(false);
   });
 
@@ -70,7 +73,12 @@ describe("store", () => {
   });
 
   it("reports stats", () => {
-    expect(store.stats()).toMatchObject({ runs: 2, liked: 1, edited: 1 });
+    const before = store.stats();
+    run("s1", "Stats input one.", "Stats output one.");
+    store.recordFeedback("s1", { rating: 1 });
+    run("s2", "Stats input two.", "Stats output two.");
+    store.recordFeedback("s2", { finalOutput: "Stats output two, edited." });
+    expect(store.stats()).toMatchObject({ runs: before.runs + 2, liked: before.liked + 1, edited: before.edited + 1 });
   });
 });
 

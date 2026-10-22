@@ -94,7 +94,9 @@ function target(id: ProviderId, baseUrlEnv: string, numCtxEnv: string): Provider
     // Ollama gives models a 4096-token window by default on machines with
     // less than 24 GB of VRAM, and its OpenAI-compatible API can't change it.
     // An over-long prompt is cut from the front, which drops the instructions.
-    numCtx: num(numCtxEnv, id === "ollama" ? 4096 : 0),
+    // OLLAMA_CONTEXT_LENGTH (the server's own setting) is honoured when the app
+    // sees it; `npm run doctor` reports the window the server actually uses.
+    numCtx: num(numCtxEnv, id === "ollama" ? num("OLLAMA_CONTEXT_LENGTH", 4096) : 0),
   };
 }
 
@@ -104,6 +106,22 @@ const main = target(mainId, "HUMANLY_BASE_URL", "HUMANLY_NUM_CTX");
 // A judge on another provider gets its own URL and window settings.
 const judgeTarget = judgeId === mainId ? main : target(judgeId, "HUMANLY_JUDGE_BASE_URL", "HUMANLY_JUDGE_NUM_CTX");
 const defaultModel = PROVIDERS[mainId].model;
+
+// A judge on another provider can't use the main provider's model names
+// (e.g. an Ollama tag sent to Groq). Ignore HUMANLY_JUDGE_MODEL when it just
+// repeats the drafting model, and use the judge provider's preset instead.
+function judgeModelFor(): string {
+  const explicit = process.env.HUMANLY_JUDGE_MODEL;
+  if (judgeId === mainId) return explicit ?? defaultModel;
+  const drafting = [process.env.HUMANLY_FAST_MODEL, process.env.HUMANLY_BEST_MODEL, defaultModel];
+  if (explicit && drafting.includes(explicit)) {
+    console.warn(
+      `HUMANLY_JUDGE_MODEL=${explicit} is a ${PROVIDERS[mainId].label} model but the judge runs on ${PROVIDERS[judgeId].label}; using ${PROVIDERS[judgeId].model} instead.`,
+    );
+    return PROVIDERS[judgeId].model;
+  }
+  return explicit ?? PROVIDERS[judgeId].model;
+}
 const isAnthropic = mainId === "anthropic";
 const isOllama = mainId === "ollama";
 
@@ -126,7 +144,7 @@ export const config = {
   // Scores drafts. A judge on a stronger provider (HUMANLY_JUDGE_PROVIDER)
   // makes scores, Best's choices and evals far more trustworthy than a small
   // model grading its own writing.
-  judgeModel: process.env.HUMANLY_JUDGE_MODEL ?? (judgeId === mainId ? defaultModel : PROVIDERS[judgeId].model),
+  judgeModel: judgeModelFor(),
   judgeEffort: (process.env.HUMANLY_JUDGE_EFFORT ?? "medium") as Effort,
   // "compact" is a short prompt with built-in examples, for small local
   // models that lose track of long rule lists.

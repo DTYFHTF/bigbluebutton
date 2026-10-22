@@ -246,12 +246,47 @@ async function checkOllama() {
     warn(`the judge (${judgeModel}) differs from the writer (${fast}); on this Mac Ollama will swap them in and out of memory on every rewrite.`);
   }
   if (judgeIsLocal) {
-    warn("the judge is the same small local model, so scores are optimistic. For trustworthy evals, set HUMANLY_JUDGE_PROVIDER=groq (free key) or anthropic.");
+    warn(
+      "the judge is the same small local model, so scores are optimistic. For trustworthy evals, set HUMANLY_JUDGE_PROVIDER=groq with GROQ_API_KEY " +
+        "(its judge model defaults to llama-3.3-70b-versatile) and delete any HUMANLY_JUDGE_MODEL line, or set it to a model that provider serves.",
+    );
+  } else if (process.env.HUMANLY_JUDGE_MODEL && installed(names!, process.env.HUMANLY_JUDGE_MODEL)) {
+    warn(
+      `HUMANLY_JUDGE_MODEL=${process.env.HUMANLY_JUDGE_MODEL} is a local Ollama model, but the judge runs on ${process.env.HUMANLY_JUDGE_PROVIDER}. ` +
+        "Humanly uses that provider's default judge model instead; delete the line or set a model the provider serves.",
+    );
   }
   const numCtx = Number(process.env.HUMANLY_NUM_CTX) || 4096;
   ok(
     `context window budget: ${numCtx} tokens (HUMANLY_NUM_CTX). Longer passages are rewritten in pieces. To raise it, start Ollama with OLLAMA_CONTEXT_LENGTH=8192 and set HUMANLY_NUM_CTX=8192.`,
   );
+}
+
+// After a rewrite the model is loaded, and recent Ollama versions report the
+// context window it was loaded with. A mismatch with HUMANLY_NUM_CTX means the
+// app either chunks text needlessly or risks having instructions cut off.
+async function checkWindow() {
+  const base = (process.env.HUMANLY_BASE_URL ?? "http://127.0.0.1:11434/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/api/ps`, { signal: AbortSignal.timeout(4000) });
+    const data = (await res.json()) as { models?: Array<{ name: string; context_length?: number }> };
+    const loaded = data.models?.find((m) => typeof m.context_length === "number");
+    if (!loaded?.context_length) return;
+    const configured = Number(process.env.HUMANLY_NUM_CTX) || Number(process.env.OLLAMA_CONTEXT_LENGTH) || 4096;
+    if (loaded.context_length === configured) {
+      ok(`Ollama is running ${loaded.name} with a ${loaded.context_length}-token window, matching HUMANLY_NUM_CTX`);
+    } else if (values.fix) {
+      setEnv({ HUMANLY_NUM_CTX: String(loaded.context_length) });
+      ok(`Ollama runs ${loaded.name} with a ${loaded.context_length}-token window; set HUMANLY_NUM_CTX=${loaded.context_length} in ${ENV_FILE}`);
+    } else {
+      warn(
+        `Ollama runs ${loaded.name} with a ${loaded.context_length}-token window but the app assumes ${configured}. ` +
+          `Set HUMANLY_NUM_CTX=${loaded.context_length} (or re-run with --fix).`,
+      );
+    }
+  } catch {
+    // Older Ollama versions don't report it; the default assumption stands.
+  }
 }
 
 async function smokeTest() {
@@ -304,6 +339,7 @@ if ((process.env.HUMANLY_PROVIDER ?? "anthropic") === "ollama") await checkOllam
 else ok(`provider "${process.env.HUMANLY_PROVIDER ?? "anthropic"}" is hosted; skipping Ollama checks`);
 
 if (failures === 0) await smokeTest();
+if (failures === 0 && (process.env.HUMANLY_PROVIDER ?? "anthropic") === "ollama") await checkWindow();
 else console.log("\nFix the items above, then run `npm run doctor` again.");
 
 console.log(failures === 0 ? "\nAll good. Start the app with: npm run dev" : `\n${failures} problem${failures === 1 ? "" : "s"} found.`);

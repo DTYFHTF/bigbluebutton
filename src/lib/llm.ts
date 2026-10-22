@@ -269,7 +269,12 @@ export async function generateJson<T>(
         chatRequest({ ...target, model: req.model, maxTokens, system, history: req.history, user, stream: false, extra: fields, signal }),
       extra,
     );
-    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string | null } }> };
+    const body = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }>;
+    };
+    // A reply cut off at max_tokens can't be valid JSON, and retrying with the
+    // same limit would fail the same way.
+    if (body.choices?.[0]?.finish_reason === "length") throw new OutputTruncatedError();
     const reply = stripThinking(body.choices?.[0]?.message?.content ?? "");
     try {
       return schema.parse(coerceNumericStrings(extractJson(reply), numbers));

@@ -5,11 +5,10 @@ import { builtinExemplars } from "./exemplars";
 import { pickExamples } from "./examples";
 import { bestScored, issueNotes, judge, type Judgement } from "./judge";
 import { streamText } from "./llm";
-import { lexicalChange, missingNumbers, sentencesReworked } from "./metrics";
-import { NEAR_COPY_FLOOR, type ModeId } from "./modes";
+import { copiedSentences, lexicalChange, missingNumbers, sentencesReworked } from "./metrics";
+import { NEAR_COPY_FLOOR, SYNONYM_TARGETS, type ModeId } from "./modes";
 import {
   REFINE_INSTRUCTIONS,
-  VARIETY_NUDGE,
   buildRefineMessage,
   buildSystemPrompt,
   buildUserMessage,
@@ -17,6 +16,7 @@ import {
   maxTokensFor,
   missingFrozenTerms,
   taskReminder,
+  varietyNudge,
   type ParaphraseRequest,
 } from "./prompt";
 import { activeGuide, learnedPhrases, saveRun, type Scores } from "./store";
@@ -80,7 +80,7 @@ export interface DraftOptions {
   guideRules: string[];
   angle?: string;
   useExamples?: boolean;
-  // Extra instruction for a retry (e.g. VARIETY_NUDGE).
+  // Extra instruction for a retry (e.g. varietyNudge()).
   nudge?: string;
   // Sampling seed (OpenAI-compatible providers only); defaults to HUMANLY_SEED.
   seed?: number;
@@ -161,27 +161,49 @@ function losesProtected(req: ParaphraseRequest, current: string, candidate: stri
 }
 
 // When a draft barely changed the wording (a common small-model failure: it
-// "rewrites" by copying), ask again once with a firmer instruction. The retry
-// is kept only if it changed more without dropping numbers, frozen terms, or
-// a big share of the length.
+// "rewrites" by copying), ask again once with a firmer instruction. A retry is
+// kept only if it copies fewer of the input's sentences, stays within the
+// mode's expected length and the slider's range, and keeps every number and
+// frozen term the draft kept. A failed retry never costs the finished draft.
 export async function ensureVariety(
   req: ParaphraseRequest,
   draft: string,
   redraft: (nudge: string) => Promise<string>,
   onRetry: () => void,
+  signal?: AbortSignal,
 ): Promise<{ text: string; retried: boolean }> {
-  if (req.mode === "fluency" || config.nearCopyRetries === 0) return { text: draft, retried: false };
+  // Fluency should change little, and Shorten works by deleting words, so
+  // a low share of new vocabulary is expected in both.
+  if (req.mode === "fluency" || req.mode === "shorten" || config.nearCopyRetries === 0) {
+    return { text: draft, retried: false };
+  }
   const floor = NEAR_COPY_FLOOR[req.synonyms] ?? NEAR_COPY_FLOOR[3];
+  const ceiling = Math.min(1, 2 * (SYNONYM_TARGETS[req.synonyms] ?? SYNONYM_TARGETS[3]) + 0.1);
+  const [minRatio, maxRatio] = req.mode === "expand" ? [1, 3.5] : [0.75, 1.35];
+  const inputWords = Math.max(1, countWords(req.text));
+
   let best = draft;
   let bestChange = lexicalChange(req.text, draft);
-  for (let i = 0; i < config.nearCopyRetries && bestChange < floor; i++) {
+  let bestCopied = copiedSentences(req.text, draft);
+  for (let i = 0; i < config.nearCopyRetries && (bestChange < floor || !best.trim()); i++) {
     onRetry();
-    const candidate = await redraft(VARIETY_NUDGE);
+    let candidate: string;
+    try {
+      candidate = await redraft(varietyNudge(req.synonyms));
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      console.error("variety retry failed; keeping the first draft", error);
+      break;
+    }
+    if (!candidate.trim()) continue;
     const change = lexicalChange(req.text, candidate);
-    const lengthRatio = countWords(candidate) / Math.max(1, countWords(best));
-    if (change > bestChange && lengthRatio >= 0.6 && lengthRatio <= 1.6 && !losesProtected(req, best, candidate)) {
+    const copied = copiedSentences(req.text, candidate);
+    const ratio = countWords(candidate) / inputWords;
+    const improves = !best.trim() || (change > bestChange && (copied < bestCopied || bestCopied === 0));
+    if (improves && change <= ceiling && ratio >= minRatio && ratio <= maxRatio && !losesProtected(req, best, candidate)) {
       best = candidate;
       bestChange = change;
+      bestCopied = copied;
     }
   }
   return { text: best, retried: best !== draft };
@@ -220,7 +242,7 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
     const base: DraftOptions = { model, effort: config.fastEffort, guideRules, useExamples: opts.useExamples, signal };
     emit({ type: "stage", stage: "writing", message: "Writing…" });
     const first = await draftOnce(req, { ...base, onDelta: (text) => emit({ type: "delta", text }) });
-    const varied = await ensureVariety(req, first, (nudge) => draftOnce(req, { ...base, nudge }), reworking);
+    const varied = await ensureVariety(req, first, (nudge) => draftOnce(req, { ...base, nudge }), reworking, signal);
     if (varied.retried) {
       emit({ type: "reset" });
       emit({ type: "delta", text: varied.text });
@@ -260,12 +282,21 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
     let bestJudgement: Judgement | null = judgements?.[bestIndex] ?? null;
     let picked = drafts.length > 1 ? `Best of ${drafts.length} drafts` : "One draft";
 
-    const varied = await ensureVariety(req, bestDraft, (nudge) => draftOnce(req, { ...base, nudge }), reworking);
+    const varied = await ensureVariety(req, bestDraft, (nudge) => draftOnce(req, { ...base, nudge }), reworking, signal);
     if (varied.retried) {
-      bestDraft = varied.text;
-      picked += ", reworked for variety";
-      // The judge's notes were about the old draft.
-      bestJudgement = (await tryJudge(req, [bestDraft], signal, extraPhrases))?.[0] ?? null;
+      // The retry must hold up against the draft the judge picked: about the
+      // same overall and no real loss of meaning. A judge that can't compare
+      // them leaves the judged draft in place.
+      const pair = await tryJudge(req, [bestDraft, varied.text], signal, extraPhrases);
+      const kept = pair?.[0]?.scores;
+      const retry = pair?.[1]?.scores;
+      if (kept && retry && retry.meaning >= kept.meaning - 1 && retry.overall >= kept.overall - 0.3) {
+        bestDraft = varied.text;
+        bestJudgement = pair![1];
+        picked += ", reworked for variety";
+      } else if (kept) {
+        bestJudgement = pair![0];
+      }
     }
 
     if (!bestJudgement?.scores) {
@@ -281,6 +312,9 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
       detail = `${picked}, no polish needed`;
     } else {
       emit({ type: "stage", stage: "refining", message: "Polishing the best draft…" });
+      // The polish is optional: if it fails for any reason other than the
+      // user stopping, the judged draft ships.
+      const polish: { failure: "overflow" | "failed" | null } = { failure: null };
       const refined = cleanOutput(
         req.text,
         await streamText(
@@ -295,9 +329,10 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
           },
           { onDelta: (text) => emit({ type: "delta", text }), signal },
         ).catch((error) => {
-          // A polish that doesn't fit the context window is skipped, not fatal.
-          if (error instanceof ContextOverflowError) return "";
-          throw error;
+          if (signal?.aborted) throw error;
+          polish.failure = error instanceof ContextOverflowError ? "overflow" : "failed";
+          if (polish.failure === "failed") console.error("polish failed; keeping the draft", error);
+          return "";
         }),
       );
 
@@ -311,7 +346,12 @@ export async function runPipeline(req: ParaphraseRequest, opts: PipelineOptions 
         emit({ type: "delta", text: bestDraft });
         output = bestDraft;
         scores = bestJudgement.scores;
-        detail = `${picked}; too long to polish locally`;
+        detail =
+          polish.failure === "overflow"
+            ? `${picked}; too long to polish in the model's context window`
+            : polish.failure === "failed"
+              ? `${picked}; the polish failed, kept the draft`
+              : `${picked}; the polish came back empty, kept the draft`;
       } else if (!draftScore || !refinedScore) {
         output = refined;
         scores = refinedScore;
