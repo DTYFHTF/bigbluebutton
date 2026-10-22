@@ -79,6 +79,41 @@ export function extractJson(text: string): unknown {
   throw new Error("The model reply contained an unterminated JSON object.");
 }
 
+// Names of properties a JSON Schema declares as numbers, at any depth.
+export function numericKeys(schema: unknown, out = new Set<string>()): Set<string> {
+  if (!schema || typeof schema !== "object") return out;
+  const node = schema as Record<string, unknown>;
+  const props = node.properties as Record<string, Record<string, unknown>> | undefined;
+  if (props) {
+    for (const [key, sub] of Object.entries(props)) {
+      if (sub && (sub.type === "number" || sub.type === "integer")) out.add(key);
+      numericKeys(sub, out);
+    }
+  }
+  if (node.items) numericKeys(node.items, out);
+  for (const key of ["anyOf", "oneOf", "allOf"]) {
+    const list = node[key];
+    if (Array.isArray(list)) list.forEach((sub) => numericKeys(sub, out));
+  }
+  return out;
+}
+
+// Small models sometimes quote numbers ("naturalness": "8"). Turns numeric
+// strings into numbers, but only under the given keys, so a quoted "2025" in
+// a text field stays a string and anything malformed still fails validation.
+export function coerceNumericStrings(value: unknown, keys: ReadonlySet<string>): unknown {
+  if (Array.isArray(value)) return value.map((v) => coerceNumericStrings(v, keys));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => {
+        if (keys.has(k) && typeof v === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return [k, Number(v)];
+        return [k, coerceNumericStrings(v, keys)];
+      }),
+    );
+  }
+  return value;
+}
+
 // Splits a server-sent-events byte stream into `data:` payloads.
 export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = body.getReader();
@@ -99,16 +134,39 @@ export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator
   if (last.startsWith("data:")) yield last.slice(5).trim();
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface ChatRequest {
   baseUrl: string;
   // Omitted for local servers that don't authenticate.
   apiKey?: string;
   model: string;
   system: string;
+  // Example exchanges placed between the system prompt and the real request.
+  history?: ChatTurn[];
   user: string;
   maxTokens: number;
   stream: boolean;
+  // Extra top-level fields (sampling, provider extensions), sent as given.
+  extra?: Record<string, unknown>;
   signal?: AbortSignal;
+}
+
+export function chatBody(req: ChatRequest): Record<string, unknown> {
+  return {
+    model: req.model,
+    max_tokens: req.maxTokens,
+    stream: req.stream,
+    messages: [
+      { role: "system", content: req.system },
+      ...(req.history ?? []),
+      { role: "user", content: req.user },
+    ],
+    ...req.extra,
+  };
 }
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -134,15 +192,7 @@ export async function chatRequest(req: ChatRequest, retries = 4): Promise<Respon
         "Content-Type": "application/json",
         ...(req.apiKey ? { Authorization: `Bearer ${req.apiKey}` } : {}),
       },
-      body: JSON.stringify({
-        model: req.model,
-        max_tokens: req.maxTokens,
-        stream: req.stream,
-        messages: [
-          { role: "system", content: req.system },
-          { role: "user", content: req.user },
-        ],
-      }),
+      body: JSON.stringify(chatBody(req)),
     });
     if (res.ok) return res;
     const retryable = res.status === 429 || res.status >= 500;

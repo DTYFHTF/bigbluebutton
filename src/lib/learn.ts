@@ -103,15 +103,23 @@ export async function compareGuides(
 ) {
   const passages = rotatingSlice(loadEvalPassages(), size, seed);
   const extraPhrases = learnedPhrases();
-  const rows = await mapLimit(passages, 3, async (passage) => {
+  const scored = await mapLimit(passages, 3, async (passage, index) => {
     const req = evalRequest(passage, "fast");
+    // Both arms get the same seed (on providers that take one), so the guide
+    // is the only difference between them.
     const draft = (guideRules: string[]) =>
-      draftOnce(req, { model: config.bestModel, effort: config.bestEffort, guideRules, useExamples: true });
+      draftOnce(req, { model: config.bestModel, effort: config.bestEffort, guideRules, useExamples: true, seed: 1000 + index });
     const [a, b] = await Promise.all([draft(baselineRules), draft(candidateRules)]);
     const [ja, jb] = await judge(req, passage.text, [a, b], { extraPhrases });
+    if (!ja.scores || !jb.scores) {
+      log(`  ${passage.id}: skipped (the judge returned no score)`);
+      return null;
+    }
     log(`  ${passage.id}: current ${ja.scores.overall.toFixed(2)} vs proposed ${jb.scores.overall.toFixed(2)}`);
     return { id: passage.id, baseline: ja.scores.overall, candidate: jb.scores.overall };
   });
+  const rows = scored.filter((r): r is NonNullable<typeof r> => r !== null);
+  if (rows.length === 0) throw new Error("The judge couldn't score any eval passage, so the guides can't be compared.");
   const mean = (k: "baseline" | "candidate") => rows.reduce((s, r) => s + r[k], 0) / rows.length;
   return { rows, baseline: mean("baseline"), candidate: mean("candidate") };
 }

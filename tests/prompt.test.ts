@@ -3,9 +3,14 @@ import {
   buildRefineMessage,
   buildSystemPrompt,
   buildUserMessage,
+  changeTarget,
+  exampleTurns,
   missingFrozenTerms,
   paraphraseRequestSchema,
+  taskReminder,
 } from "@/lib/prompt";
+import { allExemplars } from "@/lib/exemplars";
+import { loadEvalPassages } from "@/lib/evalset";
 
 const base = paraphraseRequestSchema.parse({ text: "Hello there.", mode: "humanize" });
 
@@ -66,5 +71,51 @@ describe("learned guide, angles and examples", () => {
 describe("missingFrozenTerms", () => {
   it("reports frozen terms present in input but lost in output", () => {
     expect(missingFrozenTerms("Use Acme and Zed.", "Use Acme and Zee.", ["Acme", "Zed", "Other"])).toEqual(["Zed"]);
+  });
+});
+
+describe("prompt profiles", () => {
+  it("full Humanize no longer tells the model to leave sentences plain", () => {
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).not.toMatch(/leaves some sentences plain/);
+    expect(prompt).toContain("Change about 35% of the words");
+  });
+
+  it("compact profile is short, positive and carries the essentials", () => {
+    const req = { ...base, frozen: ["Acme Cloud"], synonyms: 4 };
+    const prompt = buildSystemPrompt(req, { profile: "compact", guideRules: Array.from({ length: 12 }, (_, i) => `rule ${i}`) });
+    expect(prompt.length).toBeLessThan(buildSystemPrompt(req).length / 2);
+    expect(prompt).toContain("change about half of the words");
+    expect(prompt).toContain('"Acme Cloud"');
+    expect(prompt).not.toMatch(/delve|tapestry/);
+    expect(prompt.match(/^Also:/gm)).toHaveLength(8);
+  });
+
+  it("fluency has no change target", () => {
+    expect(buildSystemPrompt({ ...base, mode: "fluency" }, { profile: "compact" })).not.toContain("Wording:");
+    expect(taskReminder({ ...base, mode: "fluency" })).not.toContain("Change");
+  });
+
+  it("maps slider levels to targets", () => {
+    expect([1, 2, 3, 4, 5].map(changeTarget)).toEqual(["about 10%", "about 20%", "about 35%", "about half", "two thirds or more"]);
+  });
+
+  it("repeats the task after the passage", () => {
+    const msg = buildUserMessage("Hello.", [], taskReminder(base));
+    expect(msg.startsWith("<text>\nHello.\n</text>\n\nNow rewrite the passage above in Humanize mode.")).toBe(true);
+  });
+
+  it("formats examples as chat turns", () => {
+    expect(exampleTurns([{ input: "a", output: "b" }])).toEqual([
+      { role: "user", content: "<text>\na\n</text>" },
+      { role: "assistant", content: "b" },
+    ]);
+  });
+
+  it("keeps built-in examples out of the eval set", () => {
+    const evalTexts = loadEvalPassages().map((p) => p.text);
+    for (const e of allExemplars()) {
+      expect(evalTexts.some((t) => t.includes(e.input.slice(0, 40)))).toBe(false);
+    }
   });
 });

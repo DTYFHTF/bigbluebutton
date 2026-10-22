@@ -8,6 +8,8 @@ export interface EvalPassage {
   genre: string;
   mode: ModeId;
   text: string;
+  // Terms the rewrite must keep exactly.
+  frozen?: string[];
 }
 
 export function loadEvalPassages(): EvalPassage[] {
@@ -15,8 +17,14 @@ export function loadEvalPassages(): EvalPassage[] {
   return JSON.parse(fs.readFileSync(file, "utf8")) as EvalPassage[];
 }
 
-export function evalRequest(passage: EvalPassage, quality: Quality): ParaphraseRequest {
-  return paraphraseRequestSchema.parse({ text: passage.text, mode: passage.mode, quality });
+export function evalRequest(passage: EvalPassage, quality: Quality, synonyms = 3): ParaphraseRequest {
+  return paraphraseRequestSchema.parse({
+    text: passage.text,
+    mode: passage.mode,
+    quality,
+    synonyms,
+    frozen: passage.frozen ?? [],
+  });
 }
 
 // A rotating slice so successive learning rounds are checked on different

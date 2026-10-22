@@ -61,6 +61,29 @@ NVIDIA_API_KEY=nvapi-...
 
 Local models need the app and Ollama on the same machine, and quality depends on model size: 7–8B models run on most laptops but rewrite and judge noticeably worse than Claude. Free hosted providers use a default Llama 70B model (override with `HUMANLY_*_MODEL` if it is retired). They get 2 drafts instead of 3, and calls are spaced out to stay under per-minute caps, so a Best rewrite takes longer. The engine asks free models for JSON and validates it, retrying once if the reply is malformed. Run `npm run eval` on each provider and compare the mean scores before settling on one. The scores come from the configured judge model, so only compare runs that use the same judge model.
 
+### Getting better rewrites
+
+The model is by far the biggest factor. A 3–4B model on a laptop won't match a hosted model, so the published site should run on a hosted model (Claude, or a 70B model via Groq or NVIDIA) and keep local models for development or a free tier. For local models:
+
+- Run `npm run doctor -- --fix --pull`. It recommends a model for your Mac's memory, downloads it, and switches to it. `phi3:mini` is one of the weakest rewriters, and `llama3.1:8b` partly runs on the CPU on an 8 GB Mac.
+- Small models get a short prompt with built-in example rewrites (`HUMANLY_PROMPT_PROFILE=compact`), and the instructions are repeated after the text.
+- A draft that barely changed the wording gets one retry with a firmer instruction. The retry is kept only if it changed more without dropping numbers or frozen terms.
+- Ollama's default 4096-token window is budgeted, so instructions are never silently cut. Passages too long for the window are rewritten paragraph by paragraph.
+- The synonym slider gives the model a concrete target (about 10% / 20% / 35% / half / two thirds of the wording). The Writing signals panel shows the share of new vocabulary and of reworked sentences.
+
+### Measuring quality fairly
+
+```bash
+HUMANLY_SEED=1 npm run eval -- --quality fast --concurrency 1 --label baseline
+npm run eval -- --quality fast --synonyms all          # how each slider level behaves
+npm run eval -- --ids long-ev-blog --repeat 3          # run-to-run noise
+npm run eval -- --compare eval/competitor/tool-s3.json --judge-compare
+```
+
+- Put the judge on a stronger model (`HUMANLY_JUDGE_PROVIDER=groq` with a free key) before trusting scores. The eval warns when a model is judging itself.
+- `--compare` takes a JSON array of `{"id": "<passage id>", "text": "<rewrite>"}`, for example outputs you saved by hand from another paraphraser in the matching mode. It reports the same metrics side by side: new vocabulary, reworked sentences, stock phrases, missing numbers and frozen terms, and judge scores. Use it privately for benchmarking, and check the other tool's terms.
+- These measure the writing. They don't measure, and Humanly isn't tuned for, AI-detector scores.
+
 ### Configuration
 
 All models default to the provider's preset (`claude-haiku-5-5` on Anthropic). You can change any setting in `.env.local`:
@@ -70,7 +93,7 @@ All models default to the provider's preset (`claude-haiku-5-5` on Anthropic). Y
 | `HUMANLY_FAST_MODEL` / `HUMANLY_FAST_EFFORT` | provider preset / `low` | Fast, single-pass rewrites (effort: Anthropic only) |
 | `HUMANLY_BEST_MODEL` / `HUMANLY_BEST_EFFORT` | provider preset / `medium` | Drafts, polish, alternatives, learner |
 | `HUMANLY_JUDGE_MODEL` / `HUMANLY_JUDGE_EFFORT` | provider preset / `medium` | Scores drafts and final output |
-| `HUMANLY_CANDIDATES` | `3` (`2` on free providers) | Competing drafts per Best rewrite (1–5) |
+| `HUMANLY_CANDIDATES` | `3` (`2` on hosted free providers, `1` on Ollama) | Competing drafts per Best rewrite (1–5) |
 | `HUMANLY_MAX_WORDS` | `0` (off) | Word cap per request |
 | `HUMANLY_RATE_LIMIT_PER_MIN` | `0` (off) | Requests per IP per minute |
 | `HUMANLY_DATA_DIR` | `./data` | Where the SQLite database lives |
@@ -125,7 +148,11 @@ src/
   lib/
     llm.ts          one interface over Anthropic and OpenAI-compatible providers
     openaiCompat.ts streaming, retries, think-tag stripping, JSON extraction
-    pipeline.ts     drafts → judge → polish → final check
+    pipeline.ts     drafts → judge → variety retry → polish → final check; chunking for small windows
+    budget.ts       context-window budgeting and chunking
+    cleanup.ts      strips preambles, notes, tags and wrapping quotes models add
+    metrics.ts      new-vocabulary share, reworked sentences, missing numbers
+    exemplars.ts    built-in example rewrites for small models
     judge.ts        comparative scoring with structured output
     scoring.ts      combines judge ratings and local checks into one score
     learn.ts        style-guide learner with A/B adoption

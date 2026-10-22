@@ -26,7 +26,52 @@ const SAMPLE =
   values.text ??
   "In today's fast-paced digital landscape, effective communication plays a crucial role in the success of any organization. It's important to note that teams who leverage collaborative tools can navigate remote work more seamlessly.";
 const MIN_PULL_BYTES = 6 * 1024 ** 3;
-const PREFERRED = ["llama3.1", "llama3.2", "llama3", "qwen2.5", "qwen3", "gemma", "mistral", "phi3", "phi4"];
+const PREFERRED = ["qwen3.5", "qwen3", "gemma4", "ministral-3", "llama3.1", "llama3.2", "llama3", "qwen2.5", "gemma", "mistral", "phi4", "phi3"];
+
+interface Recommendation {
+  tag: string;
+  gb: number;
+  note: string;
+}
+
+// Picks for rewriting by unified memory, from tags verified in the Ollama
+// library (late 2026). macOS lets the GPU use about two thirds of RAM, so an
+// 8 GB Mac should stay near 4 GB of weights.
+function recommendations(ramGb: number): Recommendation[] {
+  if (ramGb <= 12) {
+    return [
+      { tag: "qwen3:4b-instruct-2507-q4_K_M", gb: 2.5, note: "fast, follows instructions well, no 'thinking' step" },
+      { tag: "qwen3.5:4b", gb: 4.0, note: "newer; thinking is switched off automatically" },
+      { tag: "gemma4:e2b-it-qat", gb: 4.3, note: "natural-sounding prose" },
+      { tag: "ministral-3:3b", gb: 3.0, note: "a different voice" },
+    ];
+  }
+  if (ramGb <= 20) {
+    return [
+      { tag: "qwen3.5:9b", gb: 7.6, note: "strong instruction following" },
+      { tag: "gemma4:e4b-it-qat", gb: 6.1, note: "natural-sounding prose" },
+      { tag: "gemma4:12b-it-qat", gb: 7.2, note: "best prose that fits 16 GB" },
+      { tag: "ministral-3:8b", gb: 6.0, note: "a different voice" },
+    ];
+  }
+  return [
+    { tag: "gemma4:12b", gb: 8.0, note: "best prose quality here" },
+    { tag: "qwen3.5:9b", gb: 7.6, note: "strong instruction following" },
+    { tag: "ministral-3:14b", gb: 9.1, note: "a different voice" },
+  ];
+}
+
+// Models that work but rewrite noticeably worse than the picks above.
+const WEAK = /^(phi3|phi-3|llama3\.2:1b|qwen2\.5:0\.5b)/i;
+
+function freeDiskBytes(): number {
+  try {
+    const s = fs.statfsSync(os.homedir());
+    return s.bavail * s.bsize;
+  } catch {
+    return Infinity;
+  }
+}
 
 let failures = 0;
 const ok = (msg: string) => console.log(`  ok    ${msg}`);
@@ -127,52 +172,85 @@ async function checkOllama() {
     // statfs is unavailable on some platforms; skip.
   }
 
+  const ramGb = os.totalmem() / 1024 ** 3;
+  const recs = recommendations(ramGb);
+  const pick = recs[0];
+  const recTags = new Set(recs.map((r) => r.tag));
+  console.log(`        recommended for ${Math.round(ramGb)} GB of memory: ${recs.map((r) => `${r.tag} (${r.gb} GB, ${r.note})`).join("; ")}`);
+
   const wanted = {
     HUMANLY_FAST_MODEL: process.env.HUMANLY_FAST_MODEL ?? "llama3.1:8b",
     HUMANLY_BEST_MODEL: process.env.HUMANLY_BEST_MODEL ?? "llama3.1:8b",
     HUMANLY_JUDGE_MODEL: process.env.HUMANLY_JUDGE_MODEL ?? "llama3.1:8b",
   };
-  const missing = [...new Set(Object.values(wanted))].filter((m) => !installed(names!, m));
-  if (missing.length === 0) {
-    ok(`configured model${new Set(Object.values(wanted)).size > 1 ? "s are" : " is"} installed: ${[...new Set(Object.values(wanted))].join(", ")}`);
-    return;
-  }
-
-  const alternative = pickInstalled(names);
-  if (alternative && values.fix) {
+  const judgeIsLocal = (process.env.HUMANLY_JUDGE_PROVIDER ?? "ollama") === "ollama";
+  const localModels = [...new Set(judgeIsLocal ? Object.values(wanted) : [wanted.HUMANLY_FAST_MODEL, wanted.HUMANLY_BEST_MODEL])];
+  const missing = localModels.filter((m) => !installed(names!, m));
+  const switchTo = (tag: string, why: string) => {
     setEnv({
       HUMANLY_PROVIDER: "ollama",
-      HUMANLY_FAST_MODEL: alternative,
-      HUMANLY_BEST_MODEL: alternative,
-      HUMANLY_JUDGE_MODEL: alternative,
+      HUMANLY_FAST_MODEL: tag,
+      HUMANLY_BEST_MODEL: tag,
+      ...(judgeIsLocal ? { HUMANLY_JUDGE_MODEL: tag } : {}),
     });
-    ok(`${missing.join(", ")} not installed; set all three models to ${alternative} in ${ENV_FILE}`);
-    return;
-  }
-  if (!alternative && values.pull) {
-    const free = (() => {
-      try {
-        const s = fs.statfsSync(os.homedir());
-        return s.bavail * s.bsize;
-      } catch {
-        return Infinity;
-      }
-    })();
-    if (free < MIN_PULL_BYTES) {
-      bad("Not enough disk space to download a model.", "Free up about 6 GB, then run again.");
-      return;
+    ok(`${why}; set the model${judgeIsLocal ? "s" : ""} to ${tag} in ${ENV_FILE}`);
+  };
+  const pullPick = (): boolean => {
+    if (freeDiskBytes() < (pick.gb + 1.5) * 1024 ** 3) {
+      bad(`Not enough disk space to download ${pick.tag} (${pick.gb} GB).`, "Free up some space, then run again.");
+      return false;
     }
-    console.log("        downloading llama3.1:8b (about 4.9 GB)...");
-    const pull = spawnSync("ollama", ["pull", "llama3.1:8b"], { stdio: "inherit" });
-    if (pull.status === 0) ok("downloaded llama3.1:8b");
-    else bad("The model download failed.", "See the message above; `ollama pull llama3.1:8b` can be re-run and resumes.");
-    return;
+    console.log(`        downloading ${pick.tag} (about ${pick.gb} GB)...`);
+    const pull = spawnSync("ollama", ["pull", pick.tag], { stdio: "inherit" });
+    if (pull.status !== 0) {
+      bad("The model download failed.", `See the message above; \`ollama pull ${pick.tag}\` resumes where it stopped.`);
+      return false;
+    }
+    names!.push(pick.tag);
+    return true;
+  };
+
+  const current = wanted.HUMANLY_FAST_MODEL;
+  const weak = WEAK.test(current) || (ramGb <= 12 && /^llama3\.1:8b/.test(current));
+
+  if (missing.length === 0) {
+    ok(`configured model${localModels.length > 1 ? "s are" : " is"} installed: ${localModels.join(", ")}`);
+    if (weak && values.pull && !recTags.has(current)) {
+      if (pullPick()) switchTo(pick.tag, `upgraded from ${current}`);
+    } else if (weak) {
+      warn(
+        `${current} ${WEAK.test(current) ? "is one of the weakest rewriters" : "is too big for this Mac and partly runs on the CPU"}. ` +
+          `Run with --pull to download and switch to ${pick.tag} (${pick.gb} GB).`,
+      );
+    }
+  } else {
+    const installedRec = recs.find((r) => installed(names!, r.tag))?.tag;
+    const alternative = installedRec ?? pickInstalled(names);
+    if (values.pull && !installedRec) {
+      if (pullPick()) switchTo(pick.tag, `${missing.join(", ")} not installed`);
+    } else if (alternative && values.fix) {
+      switchTo(alternative, `${missing.join(", ")} not installed`);
+    } else {
+      bad(
+        `Model not installed: ${missing.join(", ")}.`,
+        alternative
+          ? `Run with --fix to use "${alternative}" (already installed), or --fix --pull to download ${pick.tag} (${pick.gb} GB).`
+          : `Run with --fix --pull to download ${pick.tag} (${pick.gb} GB), or run \`ollama pull ${pick.tag}\`.`,
+      );
+    }
   }
-  bad(
-    `Model not installed: ${missing.join(", ")}.`,
-    alternative
-      ? `Run with --fix to use "${alternative}" (already installed), or run \`ollama pull ${missing[0]}\`.`
-      : `Run \`ollama pull ${missing[0]}\` (about 4.9 GB), or re-run with --fix --pull.`,
+
+  const fast = process.env.HUMANLY_FAST_MODEL ?? current;
+  const judgeModel = process.env.HUMANLY_JUDGE_MODEL ?? fast;
+  if (judgeIsLocal && judgeModel !== fast && ramGb <= 20) {
+    warn(`the judge (${judgeModel}) differs from the writer (${fast}); on this Mac Ollama will swap them in and out of memory on every rewrite.`);
+  }
+  if (judgeIsLocal) {
+    warn("the judge is the same small local model, so scores are optimistic. For trustworthy evals, set HUMANLY_JUDGE_PROVIDER=groq (free key) or anthropic.");
+  }
+  const numCtx = Number(process.env.HUMANLY_NUM_CTX) || 4096;
+  ok(
+    `context window budget: ${numCtx} tokens (HUMANLY_NUM_CTX). Longer passages are rewritten in pieces. To raise it, start Ollama with OLLAMA_CONTEXT_LENGTH=8192 and set HUMANLY_NUM_CTX=8192.`,
   );
 }
 
@@ -193,6 +271,9 @@ async function smokeTest() {
     );
     ok(`rewrite finished in ${((Date.now() - started) / 1000).toFixed(1)}s using ${config.providerLabel} (${config.fastModel})`);
     console.log(`\n  output: ${result.output}\n`);
+    console.log(
+      `  change: ${Math.round(result.metrics.lexicalChange * 100)}% new vocabulary, ${Math.round(result.metrics.sentencesReworked * 100)}% of sentences reworked (${result.detail})`,
+    );
     if (result.scores) {
       const s = result.scores;
       console.log(`  scores: overall ${s.overall.toFixed(1)} | natural ${s.naturalness} | meaning ${s.meaning} | fluency ${s.fluency}`);

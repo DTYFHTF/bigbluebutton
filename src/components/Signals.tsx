@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { countEmDashes, findAiPhrases } from "@/lib/aiisms";
 import { changedRatio, diffWords } from "@/lib/diff";
+import { lexicalChange, sentencesReworked } from "@/lib/metrics";
 import { missingFrozenTerms } from "@/lib/prompt";
 import { countWords, sentenceRhythm } from "@/lib/text";
 
@@ -26,12 +27,26 @@ export function Signals({ source, output, frozen, extraPhrases = [] }: Props) {
       avgLength: [before.mean, after.mean],
       dashes: [countEmDashes(source), countEmDashes(output)],
       changed: changedRatio(diffWords(source, output)),
+      vocabulary: lexicalChange(source, output),
+      reworked: sentencesReworked(source, output),
       missing: missingFrozenTerms(source, output, frozen),
     };
   }, [source, output, frozen, extraPhrases]);
 
   const rows: Array<[string, string, string, string]> = [
     ["Words", String(stats.words[0]), String(stats.words[1]), ""],
+    [
+      "New vocabulary",
+      "",
+      `${Math.round(stats.vocabulary * 100)}%`,
+      "Share of the rewrite's words that weren't in the original. Word order doesn't count.",
+    ],
+    [
+      "Sentences reworked",
+      "",
+      `${Math.round(stats.reworked * 100)}%`,
+      "Sentences that aren't close copies of an original sentence.",
+    ],
     [
       "Robotic phrases",
       String(stats.robotic[0]),

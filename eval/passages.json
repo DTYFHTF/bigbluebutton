@@ -70,5 +70,59 @@
     "genre": "advice",
     "mode": "shorten",
     "text": "When it comes to studying effectively, there are several key strategies that can significantly enhance your learning outcomes. First and foremost, it is essential to create a dedicated study environment that is free from distractions. Additionally, breaking your study sessions into manageable chunks with regular breaks can help maintain focus and prevent burnout. Furthermore, actively engaging with the material through techniques such as summarizing and self-testing can lead to deeper understanding and better retention of information."
+  },
+  {
+    "id": "long-ev-blog",
+    "genre": "blog (long)",
+    "mode": "humanize",
+    "text": "Electric vehicles have rapidly emerged as a transformative force in the automotive landscape. In recent years, advancements in battery technology have significantly reduced costs, making EVs more accessible to a broader range of consumers. It is important to note that government incentives have also played a pivotal role in accelerating adoption, with many countries offering tax credits and rebates to encourage the transition away from internal combustion engines.\n\nHowever, the journey toward widespread electrification is not without its challenges. Charging infrastructure remains a critical concern for many potential buyers, particularly those living in rural areas or apartment complexes without dedicated parking. Range anxiety, the fear of running out of power before reaching a charging station, continues to influence purchasing decisions. Moreover, the environmental impact of battery production, including the mining of lithium and cobalt, has raised important questions about the true sustainability of electric mobility.\n\nDespite these obstacles, industry experts remain optimistic about the future. Automakers are investing billions of dollars in research and development, and new battery chemistries promise faster charging times and longer lifespans. Furthermore, the expansion of renewable energy sources means that the electricity powering these vehicles is becoming cleaner each year. Fleet operators, from delivery companies to municipal bus services, are increasingly embracing electric models to reduce fuel and maintenance costs.\n\nIn conclusion, while the path forward requires continued investment and innovation, electric vehicles represent a crucial step toward a more sustainable transportation system. By addressing infrastructure gaps and improving battery recycling, stakeholders can unlock the full potential of this technology and pave the way for a cleaner, greener future for generations to come."
+  },
+  {
+    "id": "long-quarterly-update",
+    "genre": "company update (long)",
+    "mode": "standard",
+    "text": "We are pleased to share our results for the third quarter of 2026. Revenue grew by 18% compared with the same period last year, reaching $4.2 million, driven primarily by strong demand for our subscription products. Our customer base expanded to 1,350 active accounts, and net revenue retention remained above 110%, reflecting the continued value our clients derive from the platform.\n\nDuring the quarter, we launched two significant product updates. The new analytics dashboard, which was developed in close collaboration with our largest customers, has already been adopted by more than 600 accounts. Additionally, we introduced single sign-on support, a long-requested feature that has helped us close several enterprise deals that had previously stalled during security reviews.\n\nOperationally, we continued to invest in our team. We welcomed 14 new employees across engineering, sales, and customer success, bringing our total headcount to 92. We also opened a small office in Lisbon to better serve our growing European customer base. Gross margin improved to 76%, up from 71% a year ago, as a result of infrastructure optimizations that reduced our hosting costs.\n\nLooking ahead to the fourth quarter, our priorities remain focused on sustainable growth. We plan to expand our partner program, deepen integrations with popular accounting tools, and further improve onboarding so that new customers can see value within their first week. We would like to thank our customers, partners, and employees for their continued trust and support."
+  },
+  {
+    "id": "long-vaccines-explainer",
+    "genre": "explainer (long)",
+    "mode": "academic",
+    "text": "Vaccines function by training the immune system to recognize and respond to specific pathogens without causing the disease itself. When a vaccine is administered, it introduces an antigen, which may be a weakened or inactivated form of the pathogen, a fragment of its structure, or genetic instructions that enable the body to produce a harmless protein from the pathogen. This exposure prompts the immune system to mount a response, generating antibodies and activating specialized white blood cells.\n\nA crucial aspect of this process is the formation of immunological memory. After the initial response subsides, a population of memory B cells and T cells persists in the body. Should the individual later encounter the actual pathogen, these memory cells enable a faster and more robust response, often neutralizing the threat before symptoms develop. This mechanism explains why some vaccines require booster doses, as memory responses may wane over time.\n\nIt is important to note that vaccines also provide benefits at the population level. When a sufficiently large proportion of a community is immunized, the transmission of the pathogen is reduced, thereby protecting individuals who cannot be vaccinated, such as newborns or people with certain medical conditions. This phenomenon, commonly referred to as herd immunity, varies in its threshold depending on how contagious the disease is.\n\nUltimately, vaccines represent one of the most effective public health interventions in history. Their development has contributed to the eradication of smallpox and a dramatic decline in diseases such as polio and measles, underscoring their pivotal role in safeguarding global health."
+  },
+  {
+    "id": "long-cover-letter",
+    "genre": "cover letter (long)",
+    "mode": "humanize",
+    "text": "Dear Hiring Manager,\n\nI am writing to express my enthusiastic interest in the Product Designer position at your company. With over five years of experience creating intuitive digital experiences, I am confident that my skills and passion for user-centered design make me an ideal candidate for this role. Your commitment to building accessible tools for small businesses deeply resonates with my own values and professional aspirations.\n\nIn my current role at Northwind Studio, I have led the redesign of a scheduling application used by more than 20,000 small businesses. By conducting extensive user research and iterating on prototypes, my team and I reduced the time required to book an appointment by 40%. This experience taught me the importance of listening closely to users and translating their needs into simple, elegant solutions.\n\nFurthermore, I thrive in collaborative environments. I regularly partner with engineers, product managers, and marketing teams to ensure that design decisions align with business goals. I am also deeply committed to accessibility, and I have championed the adoption of inclusive design practices across my organization, including color contrast standards and keyboard navigation guidelines.\n\nI would welcome the opportunity to bring my expertise to your team and contribute to your mission. Thank you for considering my application. I look forward to the possibility of discussing how my background and skills can add value to your organization.\n\nSincerely,\nJordan Lee"
+  },
+  {
+    "id": "frozen-product-launch",
+    "genre": "product launch (frozen terms)",
+    "mode": "humanize",
+    "frozen": [
+      "Brightline Cloud",
+      "Smart Sync"
+    ],
+    "text": "We are thrilled to introduce Brightline Cloud, a cutting-edge storage solution designed to seamlessly integrate with your existing workflows. With the innovative Smart Sync feature, files are automatically updated across all of your devices in under 3 seconds. Brightline Cloud offers 2 TB of storage for just $9.99 per month, empowering teams of all sizes to collaborate more effectively."
+  },
+  {
+    "id": "frozen-research-note",
+    "genre": "research note (frozen terms)",
+    "mode": "academic",
+    "frozen": [
+      "Dr. Amara Okafor",
+      "CRISPR-Cas9"
+    ],
+    "text": "In a groundbreaking study published in 2025, Dr. Amara Okafor and her colleagues utilized CRISPR-Cas9 to edit a gene associated with drought tolerance in maize. The modified plants produced 23% higher yields under water-stressed conditions across 3 growing seasons. These findings underscore the potential of gene editing to play a crucial role in addressing food security challenges."
+  },
+  {
+    "id": "frozen-project-update",
+    "genre": "project update (frozen terms)",
+    "mode": "standard",
+    "frozen": [
+      "Project Helios",
+      "Q4"
+    ],
+    "text": "Project Helios is currently on track for completion by the end of Q4. The team has finished 7 of the 10 planned milestones, and the remaining work is primarily focused on testing and documentation. The budget stands at $1.8 million, which is approximately 5% below our original estimate."
   }
 ]

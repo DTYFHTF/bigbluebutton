@@ -18,6 +18,14 @@ const resultSchema = z.object({
   alternatives: z.array(z.string()).describe("Three distinct rewrites of the sentence"),
 });
 
+// On a small context window, only the text around the sentence is sent.
+const CONTEXT_CHARS = 700;
+function nearby(context: string, sentence: string): string {
+  if (config.main.numCtx <= 0 || context.length <= CONTEXT_CHARS * 2) return context;
+  const at = Math.max(0, context.indexOf(sentence));
+  return context.slice(Math.max(0, at - CONTEXT_CHARS), at + sentence.length + CONTEXT_CHARS);
+}
+
 export async function POST(request: Request) {
   const limit = checkRateLimit(clientKey(request.headers), config.rateLimitPerMin);
   if (!limit.ok) {
@@ -28,7 +36,8 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message ?? "Invalid request." }, { status: 400 });
   }
-  const { sentence, context, ...options } = parsed.data;
+  const { sentence, ...options } = parsed.data;
+  const context = nearby(parsed.data.context, sentence);
 
   const system =
     buildSystemPrompt(options, { guideRules: activeGuide()?.rules }) +
@@ -40,7 +49,9 @@ export async function POST(request: Request) {
       {
         model: config.bestModel,
         effort: "low",
+        role: "alt",
         maxTokens: 4000,
+        minOutputTokens: 300,
         system,
         user: `<context>\n${context}\n</context>\n\n<sentence>\n${sentence}\n</sentence>`,
       },
